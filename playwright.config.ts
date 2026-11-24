@@ -28,7 +28,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'npm --prefix backend run dev',
+      command: 'npm --prefix backend exec -- tsx backend/src/index.ts',
       url: `${backend}/api/health`,
       reuseExistingServer: false,
       env: {

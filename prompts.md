@@ -897,3 +897,9 @@ This log records every prompt submitted to the AI agent during the development o
 > Preserve the existing SQLite database and saved credentials. Do not reset or delete records or rewrite Git history. Stop if secrets, unresolved test failures, or remote divergence are detected. Do not deploy or purchase hosting yet. Do not ask unnecessary questions.
 >
 > Proceed with the final GitHub verification, commit, and push now.
+
+## Final deployment and submission preparation
+
+> Prepare the existing project for one Render Web Service serving React, Express and Socket.IO on the same origin. Require persistent SQLite and safe production startup, secure CORS, authentication, developer endpoints and configuration, and preserve the local database and credentials. Write the root README, exact Render deployment instructions, a three-minute mobile demo script and a half-page reflection. Run all tests, builds and deployment checks against disposable databases, scan for secrets and commit and push if tests pass and the remote has not diverged. Do not provision a paid service, upload the local database or publish an unverified live URL.
+
+> Resume the interrupted deployment work from the verified checkpoint. Preserve local data and saved credentials, complete the verification and safe GitHub push, and keep hosting strictly at ₹0. If Render Free cannot provide persistent SQLite, explain the limitation and document the safest free alternative while keeping the startup safeguards intact.

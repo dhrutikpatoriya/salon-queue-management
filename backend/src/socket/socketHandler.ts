@@ -1,3 +1,4 @@
+import { permitsOrigin, production } from '../config/environment.js';
 import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 
@@ -8,10 +9,11 @@ let ioInstance: Server | null = null;
  */
 export function setupSocketIO(server: HttpServer): Server {
   const io = new Server(server, {
-    cors: {
-      origin: '*',
-      methods: ['GET', 'POST']
-    }
+    ...(production ? {
+      allowRequest: (request, callback) => callback(null, permitsOrigin(request.headers.origin)),
+    } : {
+      cors: { origin: '*', methods: ['GET', 'POST'] },
+    }),
   });
 
   io.on('connection', (socket: Socket) => {

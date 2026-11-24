@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: salon-queue-demo
+    runtime: node
+    plan: starter
+    buildCommand: npm run build:render
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: 'off'
+    disk:
+      name: salon-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SQLITE_DB_PATH
+        value: /var/data/salon.db
+      - key: BOOTSTRAP_CREDENTIALS
+        value: 'true'
+      - key: ENABLE_DEV_TEST
+        value: 'false'
+      - key: STAFF_PIN
+        sync: false
+      - key: BARBER_CREDENTIALS
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false

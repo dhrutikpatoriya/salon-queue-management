@@ -1,0 +1,7 @@
+# Reflection
+
+I built the salon queue in small steps, starting with the customer screens and then adding reception, barber service controls, the waiting-area display, and owner settings. I used AI to turn each requirement into code, suggest edge cases, and help trace bugs. Working in small changes made it easier to compare what the screens showed with what the backend actually allowed.
+
+The most important mistake was in the early Reception tests. The AI-written tests opened the same SQLite file as the local app and used cleanup and barber-state changes that could interfere with existing records. I caught this while reviewing the tests and checking why the queue’s state changed during verification. I changed the test startup to use a fresh in-memory SQLite database, gave the tests predictable fixture tickets and a controlled clock, and removed the need to prepare the real database for a test. I also checked the database file and its WAL and SHM sidecars before and after isolated runs. For restart tests, I used a disposable file instead, so persistence could be verified safely.
+
+Playwright then helped catch issues that backend checks alone had missed. In Reception, for example, an old dashboard response could briefly re-enable Call Next even after a newer response showed the barber as Called. Seeing that sequence in the browser made the fix easier to verify. The main lesson was to treat AI output as a draft: check what it touches, reproduce failures with realistic interactions, and keep test data separate from the records the app is meant to protect.

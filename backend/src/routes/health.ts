@@ -1,3 +1,4 @@
+import { production } from '../config/environment.js';
 import { Router, Request, Response } from 'express';
 import { checkDbHealth, db } from '../db/database.js';
 
@@ -17,7 +18,7 @@ healthRouter.get('/health', (_req: Request, res: Response) => {
       uptime: process.uptime(),
       database: {
         status: 'disconnected',
-        error: dbHealth.message
+        error: production ? 'Database unavailable' : dbHealth.message
       }
     });
   }

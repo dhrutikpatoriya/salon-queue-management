@@ -11,7 +11,8 @@
     "test:step6": "npm run build && node --test dist/tests/step6_owner_test.js",
     "start": "node dist/index.js",
     "credentials:bootstrap": "node dist/scripts/bootstrapCredentials.js",
-    "test:credentials": "npm run build && node --test dist/tests/credential_access_test.js"
+    "test:credentials": "npm run build && node --test dist/tests/credential_access_test.js",
+    "test:production": "npm run build && node --test dist/tests/production_readiness_test.js"
   },
   "dependencies": {
     "argon2": "^0.45.2",

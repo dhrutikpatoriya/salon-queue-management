@@ -1,3 +1,4 @@
+import { production } from '../config/environment.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { argon2id, hash, verify, type HashOptions } from 'argon2';
 import { db } from '../db/database.js';
@@ -55,6 +56,7 @@ function storedHash(id: AccountId) {
 function loadCredential(id: AccountId): Credential | undefined {
   const stored = storedHash(id);
   if (stored !== undefined) return { hash: stored };
+  if (production) return undefined;
   const secret = environmentCredential(id);
   if (secret !== undefined) return { secret };
 }

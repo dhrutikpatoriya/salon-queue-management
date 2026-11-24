@@ -1,3 +1,4 @@
+import { production } from '../config/environment.js';
 import { Router, Request, Response } from 'express';
 import {
   joinCustomerQueue,
@@ -65,7 +66,7 @@ queueRouter.post('/join', (req: Request, res: Response) => {
 queueRouter.get('/:id', (req: Request, res: Response) => {
   try {
     const ticketId = req.params.id;
-    const accessToken = (req.headers['x-access-token'] as string) || (req.query.token as string);
+    const accessToken = (req.headers['x-access-token'] as string) || (!production && typeof req.query.token === 'string' ? req.query.token : undefined);
 
     const ticket = getQueueTicket(ticketId, accessToken);
     return res.status(200).json({

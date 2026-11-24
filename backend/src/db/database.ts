@@ -1,3 +1,4 @@
+import { production } from '../config/environment.js';
 import Database from 'better-sqlite3';
 import path from 'path';
 import { tmpdir } from 'node:os';
@@ -6,6 +7,33 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function rejectUnsafeFiles(filename: string) {
+  for (const file of [filename, filename + '-wal', filename + '-shm', filename + '-journal']) {
+    const entry = fs.lstatSync(file, { throwIfNoEntry: false });
+    if (entry && (!entry.isFile() || entry.nlink !== 1)) throw new Error('Invalid SQLite file or sidecar');
+  }
+}
+
+function productionDatabasePath() {
+  const configured = process.env.SQLITE_DB_PATH;
+  if (!configured || !path.isAbsolute(configured)) throw new Error('Production requires an absolute SQLITE_DB_PATH');
+  const filename = path.resolve(configured);
+  const directory = fs.realpathSync(path.dirname(filename));
+  if (directory !== path.dirname(filename) || filename === path.resolve(__dirname, '../../salon.db')) {
+    throw new Error('Production requires a dedicated SQLite directory');
+  }
+  if (process.env.RENDER === 'true') {
+    // A writable directory alone could still be on Render’s ephemeral filesystem.
+    if (directory !== '/var/data' || process.platform !== 'linux' ||
+        !fs.readFileSync('/proc/self/mountinfo', 'utf8').split('\n').some((line) => line.split(' ')[4] === directory)) {
+      throw new Error('Render persistent disk is not mounted at /var/data');
+    }
+  }
+  fs.accessSync(directory, fs.constants.W_OK | fs.constants.X_OK);
+  rejectUnsafeFiles(filename);
+  return filename;
+}
 
 function databasePath() {
   const testDirectory = process.env.SALON_PERSISTENCE_TEST_DIR;
@@ -17,12 +45,10 @@ function databasePath() {
       throw new Error('Disposable SQLite requires a dedicated OS temporary directory');
     }
     const filename = path.join(directory, 'test.sqlite');
-    for (const file of [filename, filename + '-wal', filename + '-shm', filename + '-journal']) {
-      const entry = fs.lstatSync(file, { throwIfNoEntry: false });
-      if (entry && (!entry.isFile() || entry.nlink !== 1)) throw new Error('Invalid disposable SQLite path');
-    }
+    rejectUnsafeFiles(filename);
     return filename;
   }
+  if (production) return productionDatabasePath();
   return process.env.NODE_ENV === 'test' ? ':memory:' : path.resolve(__dirname, '../../salon.db');
 }
 

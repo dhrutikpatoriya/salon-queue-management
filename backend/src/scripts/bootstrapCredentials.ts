@@ -1,7 +1,4 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
-dotenv.config({ path: '../.env' });
+import '../config/environment.js';
 
 try {
   const { db } = await import('../db/database.js');
