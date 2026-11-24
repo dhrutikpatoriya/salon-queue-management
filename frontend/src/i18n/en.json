@@ -1,0 +1,179 @@
+{
+  "salonName": "Royal Hair Studio",
+  "tagline": "Premium Salon Queue Management",
+  "openStatus": "Open · Closes 9 PM",
+  "languageLabel": "ગુજરાતી",
+  "nav": {
+    "home": "Home",
+    "join": "Join Queue",
+    "status": "My Status",
+    "reception": "Reception",
+    "barber": "Barber View",
+    "display": "Waiting TV",
+    "admin": "Owner Settings"
+  },
+  "badge": {
+    "step2": "Step 2: Home & Join Screens Active",
+    "step1": "Step 1: Setup & Architecture Ready",
+    "placeholder": "Placeholder Screen",
+    "demoData": "Demo Data",
+    "previewOnly": "Preview Only"
+  },
+  "home": {
+    "title": "Live Salon Queue",
+    "subtitle": "Check waiting times, view barber availability, and join today's queue from your phone.",
+    "demoDisclaimer": "Notice: Waiting counts and barber statuses below are demo sample data for Step 2 preview.",
+    "waitingCount": "Customers Waiting",
+    "estWait": "Estimated Wait",
+    "queueStatus": "Online Queue Open",
+    "queueClosed": "Online Queue Closed",
+    "joinButton": "Join Today's Queue",
+    "barbersTitle": "Today's Barbers on Duty",
+    "barbersSubtitle": "Sample on-duty barbers and real-time status",
+    "servicesPreviewTitle": "Popular Salon Services",
+    "minutes": "mins",
+    "approx": "approx",
+    "statusAvailable": "Available",
+    "statusBusy": "Busy (In Chair)",
+    "statusBreak": "On Break"
+  },
+  "join": {
+    "title": "Join the Live Queue",
+    "subtitle": "Pick 1 to 3 services, choose your preferred barber, and enter your details.",
+    "stepIndicator": "Step 2 Customer Registration",
+    "customerDetails": "1. Customer Information",
+    "nameLabel": "Your Full Name",
+    "namePlaceholder": "e.g., Rajesh Patel",
+    "phoneLabel": "10-Digit Mobile Number",
+    "phonePlaceholder": "e.g., 9876543210",
+    "phoneHelper": "Enter 10-digit Indian phone number without country code",
+    "selectServices": "2. Select Services (Max 3)",
+    "servicesCounter": "Selected",
+    "searchPlaceholder": "Search service by name...",
+    "categoryAll": "All Services",
+    "categoryHair": "Haircut",
+    "categoryBeard": "Beard & Shave",
+    "categorySpa": "Spa & Massage",
+    "categoryColor": "Coloring",
+    "selectBarber": "3. Choose Barber Preference",
+    "anyBarber": "Any barber (fastest)",
+    "anyBarberDesc": "Allocated to the earliest available barber who calls next",
+    "summaryTitle": "Queue Summary",
+    "totalServices": "Services Picked",
+    "totalDuration": "Total Duration",
+    "totalAmount": "Total Price",
+    "estWait": "Approximate Wait",
+    "demoWaitNote": "Demo estimate calculated from selected services",
+    "selectedBarber": "Barber Choice",
+    "confirmButton": "Confirm & Join Queue",
+    "resetButton": "Clear Form",
+    "maxServicesReached": "Maximum 3 services reached",
+    "errors": {
+      "nameRequired": "Please enter your full name.",
+      "nameMinLength": "Name must be at least 2 characters.",
+      "phoneRequired": "Please enter your 10-digit mobile number.",
+      "phoneInvalid": "Invalid number. Must be a 10-digit Indian mobile number starting with 6, 7, 8, or 9.",
+      "serviceRequired": "Please select at least 1 service to join the queue.",
+      "maxServices": "You cannot select more than 3 services."
+    },
+    "confirmationModal": {
+      "title": "Join Queue — Demo Confirmation",
+      "demoNotice": "Demo preview — Your queue spot has not been booked yet.",
+      "detailsHeader": "Submitted Request Details",
+      "customer": "Customer",
+      "phone": "Mobile",
+      "services": "Selected Services",
+      "duration": "Duration",
+      "total": "Total Amount",
+      "barber": "Barber Preference",
+      "readyForStep3": "In Step 3, clicking confirm will generate a live daily token (e.g. S-14) and save it to SQLite.",
+      "close": "Edit Details",
+      "dismiss": "Done Previewing"
+    }
+  },
+  "services": {
+    "haircut": {
+      "name": "Classic Haircut",
+      "desc": "Precision cut, hair wash, and modern styling"
+    },
+    "beardTrim": {
+      "name": "Beard Trim & Shape",
+      "desc": "Custom shaping, razor edge, and soothing balm"
+    },
+    "hairSpa": {
+      "name": "Premium Hair Spa",
+      "desc": "Deep conditioning treatment and scalp relaxation"
+    },
+    "shaveMassage": {
+      "name": "Royal Shave & Face Massage",
+      "desc": "Hot towel prep, clean shave, and aloe massage"
+    },
+    "hairColor": {
+      "name": "Hair Coloring",
+      "desc": "Ammonia-free rich natural black or brown color"
+    },
+    "headMassage": {
+      "name": "Ayurvedic Head Massage",
+      "desc": "Traditional cooling herbal oil head and neck therapy"
+    }
+  },
+  "barbers": {
+    "ravi": {
+      "spec": "Haircut & Beard Specialist"
+    },
+    "amit": {
+      "spec": "Styling & Fade Master"
+    },
+    "imran": {
+      "spec": "Hair Spa & Color Expert"
+    }
+  },
+  "status": {
+    "title": "Live Queue Tracking",
+    "description": "Live position tracking, estimated minutes remaining, and instant call notifications.",
+    "tokenLabel": "Your Token Number",
+    "positionLabel": "Queue Position",
+    "waitingLabel": "Estimated Waiting Time",
+    "cancelButton": "Cancel My Spot"
+  },
+  "reception": {
+    "title": "Receptionist Dashboard",
+    "description": "Monitor waiting list, register walk-in customers, call the next eligible customer, and mark cancellations or no-shows.",
+    "addWalkIn": "+ Add Walk-in",
+    "waitingList": "Live Waiting List",
+    "callNext": "Call Next Eligible"
+  },
+  "barber": {
+    "title": "Barber Workstation",
+    "description": "View current assigned customer, start service ('In chair'), mark done, and toggle break status.",
+    "assignedCustomer": "Current Customer",
+    "startService": "Start Service",
+    "doneService": "Complete & Free Chair",
+    "toggleBreak": "On Break / Available"
+  },
+  "display": {
+    "title": "Waiting Area TV Display",
+    "subtitle": "1920×1080 High-Contrast Live Screen",
+    "nowServing": "Now Serving (In Chair)",
+    "upNext": "Up Next (Next 5 in Line)",
+    "exitTv": "Exit TV Mode",
+    "noActive": "No customers currently in chair"
+  },
+  "admin": {
+    "title": "Owner Settings & Analytics",
+    "description": "Configure salon services (₹ prices & duration), manage on-duty barbers, view today's summary stats, and toggle online queue.",
+    "todayStats": "Today's Salon Statistics",
+    "serviceManagement": "Service Management",
+    "barberManagement": "Barber Duty Schedule",
+    "queueSwitch": "Online Queue Open/Closed"
+  },
+  "common": {
+    "route": "Route",
+    "purpose": "Purpose",
+    "mockRoute": "Test Parameter",
+    "systemStatus": "Backend & SQLite Status",
+    "connected": "Connected & Verified",
+    "connecting": "Connecting...",
+    "tvNote": "TV Screen runs in dedicated fullscreen view without normal navigation"
+  }
+}

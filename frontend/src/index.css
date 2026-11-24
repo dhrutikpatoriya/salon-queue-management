@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-charcoal-950: #0b0f17;
+  --color-charcoal-900: #111827;
+  --color-charcoal-800: #1f2937;
+  --color-charcoal-700: #374151;
+  --color-charcoal-600: #4b5563;
+  --color-gold-600: #b8860b;
+  --color-gold-500: #d4a017;
+  --color-gold-400: #e6b834;
+  --color-gold-300: #f5d061;
+}
+
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Hide scrollbars for clean horizontal tab scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
