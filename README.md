@@ -1,5 +1,5 @@
 # Salon Queue Management System
-**Live demo:** Pending. Add the verified public HTTPS link here after the [Railway setup and phone check](docs/deploy-railway.md).
+**Live demo:** [Salon Queue Management System](https://salon-queue-demo-production.up.railway.app) (hosted on Railway)
 
 A same-day salon queue with customer self-service, reception controls, individual barber sessions, a public waiting-area display, and owner settings. The app supports English and Gujarati.
 

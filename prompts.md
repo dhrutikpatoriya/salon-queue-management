@@ -905,3 +905,7 @@ This log records every prompt submitted to the AI agent during the development o
 > Resume the interrupted deployment work from the verified checkpoint. Preserve local data and saved credentials, complete the verification and safe GitHub push, and keep hosting strictly at ₹0. If Render Free cannot provide persistent SQLite, explain the limitation and document the safest free alternative while keeping the startup safeguards intact.
 
 > Use Railway Free only for the final deployment. Verify the account, plan, CLI and persistent volume before provisioning. Keep the single-origin React, Express, Socket.IO and SQLite stack, require persistent storage, protect credentials and leave local data untouched. Test and push readiness changes, automate what the free account permits, and publish the live URL only after public HTTPS and restart checks pass. Stop before any payment step.
+
+> Inspect the latest failed Railway deployment and identify the first startup error before making changes. Verify the public origin, mounted SQLite volume and path, credential bootstrap, runtime and networking ports, and the healthcheck. Preserve the production safeguards and keep billing disabled.
+
+> Verify the deployed Railway HTTPS homepage and health endpoint. If reachable, publish the verified URL directly below the README title, identify Railway as the host, and confirm the README links to the prompt history, demo script, and reflection. Commit and push documentation only. Leave application functionality, the deployed database, and credentials untouched.
