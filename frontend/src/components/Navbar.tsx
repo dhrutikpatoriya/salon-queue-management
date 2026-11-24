@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from '../i18n/LanguageContext';
 import { Scissors, Globe, Monitor, Home, UserPlus, Clock, ClipboardList, UserCheck, Settings } from 'lucide-react';
@@ -6,11 +6,19 @@ import { Scissors, Globe, Monitor, Home, UserPlus, Clock, ClipboardList, UserChe
 export const Navbar: React.FC = () => {
   const { t, language, toggleLanguage } = useTranslation();
   const location = useLocation();
+  const [activeTicketId, setActiveTicketId] = useState<string>('S-14');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('salon_active_ticket_id');
+    if (saved) {
+      setActiveTicketId(saved);
+    }
+  }, [location]);
 
   const navItems = [
     { path: '/', label: t('nav.home'), icon: Home },
     { path: '/join', label: t('nav.join'), icon: UserPlus },
-    { path: '/status/S-14', label: t('nav.status'), icon: Clock },
+    { path: `/status/${activeTicketId}`, label: t('nav.status'), icon: Clock },
     { path: '/reception', label: t('nav.reception'), icon: ClipboardList },
     { path: '/barber/Ravi', label: t('nav.barber'), icon: UserCheck },
     { path: '/display', label: t('nav.display'), icon: Monitor, isTv: true },

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from '../i18n/LanguageContext';
 import { DEMO_QUEUE_STATS, SALON_BARBERS, SALON_SERVICES } from '../data/salonData';
@@ -6,6 +6,14 @@ import { Scissors, Clock, Users, ArrowRight, Sparkles, CheckCircle2, ShieldAlert
 
 export const HomePage: React.FC = () => {
   const { t } = useTranslation();
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('salon_active_ticket_id');
+    if (saved) {
+      setActiveTicketId(saved);
+    }
+  }, []);
 
   return (
     <div className="space-y-5 sm:space-y-6 max-w-3xl mx-auto pb-10 w-full min-w-0 overflow-x-hidden">
@@ -13,12 +21,33 @@ export const HomePage: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4A017]/15 border border-[#D4A017]/40 text-[#D4A017] text-xs font-semibold">
           <Sparkles className="w-3.5 h-3.5" />
-          {t('badge.step2')}
+          <span>Step 3 — Live Queue Active</span>
         </span>
         <span className="text-xs text-gray-400 font-mono bg-[#1F2937] px-2.5 py-1 rounded-md border border-[#374151]">
           Route: /
         </span>
       </div>
+
+      {/* Active Ticket Banner if User Already Joined */}
+      {activeTicketId && (
+        <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-[#D4A017]/20 to-[#B8860B]/10 border-2 border-[#D4A017] text-white flex items-center justify-between gap-3 shadow-lg shadow-[#D4A017]/10 animate-in fade-in">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-[#D4A017] text-[#111827] flex items-center justify-center font-bold shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-[#D4A017] uppercase tracking-wider">Active Queue Spot</p>
+              <p className="text-sm font-semibold text-white truncate">You have an active spot in queue</p>
+            </div>
+          </div>
+          <Link
+            to={`/status/${activeTicketId}`}
+            className="px-3.5 py-2 rounded-lg bg-[#D4A017] hover:bg-[#B8860B] text-[#111827] text-xs font-black shrink-0 transition-colors shadow"
+          >
+            Track Status →
+          </Link>
+        </div>
+      )}
 
       {/* Demo Data Disclaimer (Required by User Adjustment 1) */}
       <div className="bg-[#1F2937]/80 border border-[#D4A017]/40 rounded-xl p-3 sm:p-3.5 flex items-start gap-2.5 sm:gap-3 shadow-md">
@@ -51,7 +80,7 @@ export const HomePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Live Queue Summary Box - Fully responsive without overlapping badges */}
+        {/* Live Queue Summary Box */}
         <div className="grid grid-cols-2 gap-2.5 sm:gap-3 pt-1">
           <div className="bg-[#111827] p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-[#374151] flex flex-col justify-between">
             <div className="flex items-center justify-between mb-1">

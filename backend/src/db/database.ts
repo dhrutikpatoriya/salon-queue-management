@@ -6,7 +6,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = path.resolve(__dirname, '../../salon.db');
+const dbPath = process.env.NODE_ENV === 'test'
+  ? ':memory:'
+  : path.resolve(__dirname, '../../salon.db');
 
 // Ensure database directory exists
 const dbDir = path.dirname(dbPath);

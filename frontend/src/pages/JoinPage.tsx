@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../i18n/LanguageContext';
 import { SALON_SERVICES, SALON_BARBERS } from '../data/salonData';
 import { JoinQueueFormState, JoinQueueValidationErrors, SalonService } from '../types/salon';
@@ -7,33 +7,34 @@ import {
   ArrowLeft,
   User,
   Check,
-  X,
   AlertCircle,
   Clock,
   Sparkles,
   Scissors,
   CheckCircle2,
   Search,
-  ShieldAlert
+  Loader2
 } from 'lucide-react';
 
 export const JoinPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Clean form state adhering to JoinQueueFormState interface
+  // Form state
   const [formState, setFormState] = useState<JoinQueueFormState>({
     customerName: '',
     phoneNumber: '',
-    selectedServiceIds: ['haircut'], // default to 1 service for convenience
+    selectedServiceIds: ['haircut'], // default to 1 service
     barberPreference: 'any'
   });
 
   const [errors, setErrors] = useState<JoinQueueValidationErrors>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [showDemoConfirmation, setShowDemoConfirmation] = useState(false);
   const [maxWarning, setMaxWarning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Filtered services based on search query and category
   const filteredServices = useMemo(() => {
@@ -61,18 +62,16 @@ export const JoinPage: React.FC = () => {
     return selectedServices.reduce((acc, s) => acc + s.price, 0);
   }, [selectedServices]);
 
-  // Demo wait time approximation based on services & barber
-  const demoEstimatedWait = useMemo(() => {
-    const baseWait = 15;
-    const additional = selectedServices.length * 5;
-    const barberBonus = formState.barberPreference === 'amit' ? 15 : 0;
-    return baseWait + additional + barberBonus;
-  }, [selectedServices.length, formState.barberPreference]);
+  // Preview wait time approximation based on services & barber
+  const estimatedWaitPreview = useMemo(() => {
+    const baseWait = 10;
+    const additional = selectedServices.reduce((acc, s) => acc + Math.round(s.durationMinutes / 3), 0);
+    return Math.max(10, baseWait + additional);
+  }, [selectedServices]);
 
   // Helper to sanitize phone input (handles country codes +91, 0, or spaces)
   const handlePhoneChange = (inputVal: string) => {
     let clean = inputVal.replace(/\D/g, '');
-    // If user pasted 12-digit number starting with 91, strip country code
     if (clean.length === 12 && clean.startsWith('91')) {
       clean = clean.slice(2);
     } else if (clean.length === 11 && clean.startsWith('0')) {
@@ -142,15 +141,64 @@ export const JoinPage: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Real backend submission for Step 3
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      setShowDemoConfirmation(true);
-    } else {
-      // Smoothly scroll to the top of the form so mobile users see the error immediately
+    setSubmitError(null);
+
+    if (!validateForm()) {
       if (formRef.current) {
         formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/queue/join', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          customerName: formState.customerName.trim(),
+          phoneNumber: formState.phoneNumber.trim(),
+          serviceIds: formState.selectedServiceIds,
+          barberPreference: formState.barberPreference
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || t('join.errors.joinFailed'));
+      }
+
+      const ticket = data.ticket;
+      // Mandatory security requirement: store access token in localStorage
+      if (ticket && ticket.id) {
+        if (ticket.accessToken) {
+          localStorage.setItem(`salon_access_token_${ticket.id}`, ticket.accessToken);
+        }
+        localStorage.setItem('salon_active_ticket_id', ticket.id);
+
+        // Redirect to My Status screen
+        if (data.isExistingSpot) {
+          navigate(`/status/${ticket.id}?existing=true`);
+        } else {
+          navigate(`/status/${ticket.id}`);
+        }
+      } else {
+        throw new Error('Invalid ticket response from server');
+      }
+    } catch (err: any) {
+      setSubmitError(err.message || t('join.errors.joinFailed'));
+      if (formRef.current) {
+        formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -158,10 +206,11 @@ export const JoinPage: React.FC = () => {
     setFormState({
       customerName: '',
       phoneNumber: '',
-      selectedServiceIds: [],
+      selectedServiceIds: ['haircut'],
       barberPreference: 'any'
     });
     setErrors({});
+    setSubmitError(null);
     setMaxWarning(false);
   };
 
@@ -179,7 +228,7 @@ export const JoinPage: React.FC = () => {
 
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4A017]/15 border border-[#D4A017]/40 text-[#D4A017] text-xs font-semibold shrink-0">
           <Sparkles className="w-3.5 h-3.5" />
-          {t('badge.step2')}
+          <span>Live Queue</span>
         </span>
       </div>
 
@@ -195,6 +244,17 @@ export const JoinPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Backend Submit Error Alert Banner */}
+      {submitError && (
+        <div className="p-4 rounded-xl bg-red-500/15 border-2 border-red-500/50 text-red-300 text-xs sm:text-sm flex items-start gap-3 shadow-lg animate-in fade-in">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-white">Could not join queue</p>
+            <p>{submitError}</p>
+          </div>
+        </div>
+      )}
 
       {/* Main Two-Column Layout (Form on Left, Sticky Summary on Right) */}
       <form ref={formRef} onSubmit={handleSubmit} className="grid lg:grid-cols-3 gap-5 sm:gap-6 items-start w-full min-w-0">
@@ -379,7 +439,7 @@ export const JoinPage: React.FC = () => {
                         <Clock className="w-3 h-3 text-gray-500 shrink-0" />
                         {service.durationMinutes} {t('home.minutes')}
                       </span>
-                      <span className="font-bold text-[#D4A017] text-sm">
+                      <span className="font-extrabold text-[#D4A017] text-sm">
                         ₹{service.price}
                       </span>
                     </div>
@@ -398,162 +458,157 @@ export const JoinPage: React.FC = () => {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-              {/* Option 1: Any Barber (Fastest) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Option: Any Barber (Fastest) */}
               <div
                 onClick={() => setFormState((prev) => ({ ...prev, barberPreference: 'any' }))}
-                className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between min-h-[64px] ${
+                className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between min-h-[88px] ${
                   formState.barberPreference === 'any'
-                    ? 'bg-[#111827] border-[#D4A017] ring-1 ring-[#D4A017]'
-                    : 'bg-[#111827] border-[#374151] hover:border-gray-500'
+                    ? 'bg-[#111827] border-[#D4A017] shadow-md shadow-[#D4A017]/10 ring-1 ring-[#D4A017]'
+                    : 'bg-[#111827] border-[#374151] hover:border-gray-500 hover:bg-[#1a2332]'
                 }`}
               >
-                <div className="min-w-0 flex-1 mr-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-bold text-xs sm:text-sm text-white">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-[#D4A017]/20 text-[#D4A017] mb-1">
+                      {t('home.fastest')}
+                    </span>
+                    <h3 className="font-bold text-sm text-white">
                       {t('join.anyBarber')}
-                    </span>
-                    <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded bg-[#D4A017]/20 text-[#D4A017] font-bold">
-                      Recommended
-                    </span>
+                    </h3>
                   </div>
-                  <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">{t('join.anyBarberDesc')}</p>
-                </div>
-                <div
-                  className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                    formState.barberPreference === 'any'
-                      ? 'border-[#D4A017] bg-[#D4A017]'
-                      : 'border-gray-500'
-                  }`}
-                >
-                  {formState.barberPreference === 'any' && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#111827]" />
-                  )}
-                </div>
-              </div>
-
-              {/* Named Barbers */}
-              {SALON_BARBERS.map((barber) => (
-                <div
-                  key={barber.id}
-                  onClick={() => setFormState((prev) => ({ ...prev, barberPreference: barber.id }))}
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between min-h-[64px] ${
-                    formState.barberPreference === barber.id
-                      ? 'bg-[#111827] border-[#D4A017] ring-1 ring-[#D4A017]'
-                      : 'bg-[#111827] border-[#374151] hover:border-gray-500'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
-                    <div className="w-8 h-8 rounded-full bg-[#374151] text-[#D4A017] font-bold text-xs flex items-center justify-center shrink-0">
-                      {barber.name[0]}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs sm:text-sm text-white truncate">{barber.name}</span>
-                        {barber.status === 'available' ? (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-semibold shrink-0">
-                            {t('home.statusAvailable')}
-                          </span>
-                        ) : (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 font-semibold shrink-0">
-                            {t('home.statusBusy')}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-gray-400 mt-0.5 truncate">{t(barber.specializationKey)}</p>
-                    </div>
-                  </div>
-
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                      formState.barberPreference === barber.id
+                      formState.barberPreference === 'any'
                         ? 'border-[#D4A017] bg-[#D4A017]'
-                        : 'border-gray-500'
+                        : 'border-[#374151]'
                     }`}
                   >
-                    {formState.barberPreference === barber.id && (
+                    {formState.barberPreference === 'any' && (
                       <div className="w-1.5 h-1.5 rounded-full bg-[#111827]" />
                     )}
                   </div>
                 </div>
-              ))}
+                <p className="text-[11px] text-gray-400 mt-2">
+                  {t('join.anyBarberDesc')}
+                </p>
+              </div>
+
+              {/* Specific Barbers: Ravi, Amit, Imran */}
+              {SALON_BARBERS.map((barber) => {
+                const isSelected = formState.barberPreference === barber.id;
+                return (
+                  <div
+                    key={barber.id}
+                    onClick={() => setFormState((prev) => ({ ...prev, barberPreference: barber.id }))}
+                    className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between min-h-[88px] ${
+                      isSelected
+                        ? 'bg-[#111827] border-[#D4A017] shadow-md shadow-[#D4A017]/10 ring-1 ring-[#D4A017]'
+                        : 'bg-[#111827] border-[#374151] hover:border-gray-500 hover:bg-[#1a2332]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-[#374151] text-gray-300 font-bold flex items-center justify-center text-xs">
+                          {barber.name.charAt(0)}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-white">{barber.name}</h3>
+                          <p className="text-[10px] text-gray-400">{t(barber.specializationKey)}</p>
+                        </div>
+                      </div>
+
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                          isSelected
+                            ? 'border-[#D4A017] bg-[#D4A017]'
+                            : 'border-[#374151]'
+                        }`}
+                      >
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#111827]" />}
+                      </div>
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t border-[#374151]/50 flex items-center justify-between text-[11px]">
+                      <span className="text-gray-400">Status</span>
+                      <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                        {t(`home.status.${barber.status}`)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Right Column (1 col): Live Sticky Queue Summary */}
+        {/* Right Column (1 col): Live Sticky Summary Card */}
         <div className="lg:col-span-1 lg:sticky lg:top-20 space-y-4 w-full min-w-0">
-          <div className="bg-[#1F2937] border border-[#374151] rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+          <div className="bg-[#1F2937] border-2 border-[#D4A017]/50 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#374151] pb-3">
-              <h2 className="text-sm font-bold text-white tracking-wide">{t('join.summaryTitle')}</h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#111827] text-[#D4A017] border border-[#374151]">
-                {t('badge.step2')}
+              <h2 className="text-sm font-extrabold text-white tracking-wide">
+                {t('join.summaryTitle')}
+              </h2>
+              <span className="text-xs px-2 py-0.5 rounded bg-[#D4A017]/20 text-[#D4A017] font-bold">
+                {selectedServices.length} {t('join.servicesCounter')}
               </span>
             </div>
 
-            {/* Selected Services Tags */}
-            <div className="space-y-2">
-              <span className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider block">
-                {t('join.totalServices')} ({selectedServices.length}/3)
-              </span>
-
+            {/* Selected items list */}
+            <div className="space-y-2 text-xs">
               {selectedServices.length === 0 ? (
-                <p className="text-xs text-gray-500 italic p-3 bg-[#111827] rounded-lg text-center">
-                  None selected yet
-                </p>
+                <div className="py-6 text-center text-gray-400 space-y-1">
+                  <Scissors className="w-6 h-6 mx-auto opacity-30" />
+                  <p className="text-xs">{t('join.errors.serviceRequired')}</p>
+                </div>
               ) : (
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                   {selectedServices.map((service) => (
                     <div
                       key={service.id}
-                      className="p-2.5 rounded-lg bg-[#111827] border border-[#374151] flex items-center justify-between text-xs"
+                      className="flex items-center justify-between py-1 border-b border-[#374151]/40 last:border-0"
                     >
-                      <div className="truncate mr-2">
-                        <p className="font-semibold text-white truncate">{t(service.nameKey)}</p>
-                        <p className="text-[10px] text-gray-400">{service.durationMinutes} min</p>
+                      <div className="min-w-0 flex-1 pr-2">
+                        <p className="font-semibold text-white truncate text-xs">
+                          {t(service.nameKey)}
+                        </p>
+                        <p className="text-[10px] text-gray-400">
+                          {service.durationMinutes} {t('home.minutes')}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-bold text-[#D4A017]">₹{service.price}</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleService(service.id)}
-                          className="text-gray-400 hover:text-red-400 cursor-pointer p-1 min-h-[30px] min-w-[30px] flex items-center justify-center rounded"
-                          title="Remove"
-                          aria-label={`Remove ${t(service.nameKey)}`}
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <span className="font-bold text-[#D4A017] shrink-0">
+                        ₹{service.price}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Total Duration and Price */}
-            <div className="space-y-2 pt-2 border-t border-[#374151]/80 text-xs">
-              <div className="flex justify-between items-center text-gray-300">
-                <span>{t('join.totalDuration')}:</span>
-                <span className="font-bold text-white text-sm">{totalDuration} {t('home.minutes')}</span>
-              </div>
-
+            {/* Calculations breakdown */}
+            <div className="border-t border-[#374151] pt-3 space-y-2 text-xs">
               <div className="flex justify-between items-center text-gray-300">
                 <span>{t('join.selectedBarber')}:</span>
-                <span className="font-bold text-[#D4A017] capitalize">
+                <span className="font-semibold text-white">
                   {formState.barberPreference === 'any'
                     ? t('join.anyBarber')
-                    : SALON_BARBERS.find((b) => b.id === formState.barberPreference)?.name || 'Barber'}
+                    : SALON_BARBERS.find((b) => b.id === formState.barberPreference)?.name}
                 </span>
               </div>
 
-              {/* Demo Estimated Wait Time */}
+              <div className="flex justify-between items-center text-gray-300">
+                <span>{t('join.totalDuration')}:</span>
+                <span className="font-semibold text-white">{totalDuration} {t('home.minutes')}</span>
+              </div>
+
               <div className="p-3 rounded-xl bg-[#111827] border border-[#374151] space-y-1">
                 <div className="flex justify-between items-center">
                   <span className="text-[11px] text-gray-400">{t('join.estWait')}:</span>
-                  <span className="font-black text-[#D4A017] text-sm">~{demoEstimatedWait} mins</span>
+                  <span className="font-black text-[#D4A017] text-sm">~{estimatedWaitPreview} mins</span>
                 </div>
                 <p className="text-[10px] text-gray-500 leading-tight">
-                  *{t('join.demoWaitNote')} ({t('badge.demoData')})
+                  *{t('join.demoWaitNote')}
                 </p>
               </div>
 
@@ -567,15 +622,30 @@ export const JoinPage: React.FC = () => {
             <div className="space-y-2 pt-2">
               <button
                 type="submit"
-                className="w-full min-h-[48px] py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#D4A017] to-[#B8860B] hover:brightness-110 active:scale-[0.99] text-[#111827] font-black text-sm transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+                disabled={isSubmitting || selectedServices.length === 0}
+                className={`w-full min-h-[48px] py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#D4A017] to-[#B8860B] text-[#111827] font-black text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
+                  isSubmitting || selectedServices.length === 0
+                    ? 'opacity-60 cursor-not-allowed'
+                    : 'hover:brightness-110 active:scale-[0.99] cursor-pointer'
+                }`}
               >
-                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                <span>{t('join.confirmButton')}</span>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{t('join.joiningButton')}</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                    <span>{t('join.confirmButton')}</span>
+                  </>
+                )}
               </button>
 
               <button
                 type="button"
                 onClick={handleReset}
+                disabled={isSubmitting}
                 className="w-full min-h-[38px] py-2 text-xs text-gray-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
               >
                 {t('join.resetButton')}
@@ -584,111 +654,6 @@ export const JoinPage: React.FC = () => {
           </div>
         </div>
       </form>
-
-      {/* Demo Confirmation Preview Modal (Failure 1 & 2 fixes: fully responsive with max-h and scrollable content) */}
-      {showDemoConfirmation && (
-        <div 
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm overflow-y-auto p-3 sm:p-4 flex min-h-full items-center justify-center animate-in fade-in"
-        >
-          <div className="bg-[#1F2937] border-2 border-[#D4A017] rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-5 shadow-2xl relative my-auto max-h-[92vh] flex flex-col">
-            <button
-              type="button"
-              onClick={() => setShowDemoConfirmation(false)}
-              className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-white p-2 rounded-lg cursor-pointer"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Modal Header */}
-            <div className="text-center space-y-1.5 shrink-0 pt-1">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto rounded-full bg-[#D4A017]/20 text-[#D4A017] flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7" />
-              </div>
-              <h2 className="text-lg sm:text-xl font-black text-white">
-                {t('join.confirmationModal.title')}
-              </h2>
-            </div>
-
-            {/* Modal Body - Scrollable on small screens */}
-            <div className="overflow-y-auto space-y-3.5 pr-1 flex-1">
-              {/* Explicit Demo Notice per Adjustment 2 */}
-              <div className="p-3 sm:p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-2.5">
-                <ShieldAlert className="w-5 h-5 text-[#D4A017] shrink-0 mt-0.5" />
-                <div className="space-y-1 min-w-0">
-                  <span className="font-bold text-[#D4A017] uppercase tracking-wider block text-[10px]">
-                    {t('badge.previewOnly')}
-                  </span>
-                  <p className="font-bold text-white text-xs sm:text-sm">
-                    &ldquo;{t('join.confirmationModal.demoNotice')}&rdquo;
-                  </p>
-                  <p className="text-[11px] text-gray-300">
-                    {t('join.confirmationModal.readyForStep3')}
-                  </p>
-                </div>
-              </div>
-
-              {/* Summary of Validated Submission */}
-              <div className="bg-[#111827] rounded-xl sm:rounded-2xl p-3.5 sm:p-4 border border-[#374151] space-y-2 text-xs">
-                <p className="font-bold text-gray-300 uppercase tracking-wider text-[10px] sm:text-[11px] border-b border-[#374151] pb-1.5">
-                  {t('join.confirmationModal.detailsHeader')}
-                </p>
-
-                <div className="flex justify-between items-center py-0.5 gap-2">
-                  <span className="text-gray-400 shrink-0">{t('join.confirmationModal.customer')}:</span>
-                  <span className="font-semibold text-white truncate text-right">{formState.customerName}</span>
-                </div>
-
-                <div className="flex justify-between items-center py-0.5 gap-2">
-                  <span className="text-gray-400 shrink-0">{t('join.confirmationModal.phone')}:</span>
-                  <span className="font-mono font-semibold text-white text-right">+91 {formState.phoneNumber}</span>
-                </div>
-
-                <div className="flex justify-between items-center py-0.5 gap-2">
-                  <span className="text-gray-400 shrink-0">{t('join.confirmationModal.barber')}:</span>
-                  <span className="font-semibold text-[#D4A017] capitalize text-right">
-                    {formState.barberPreference === 'any'
-                      ? t('join.anyBarber')
-                      : SALON_BARBERS.find((b) => b.id === formState.barberPreference)?.name}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-start py-0.5 gap-2">
-                  <span className="text-gray-400 shrink-0">{t('join.confirmationModal.services')}:</span>
-                  <span className="font-semibold text-white text-right">
-                    {selectedServices.map((s) => t(s.nameKey)).join(', ')}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center border-t border-[#374151]/70 pt-2 text-xs sm:text-sm font-bold">
-                  <span className="text-gray-300">{t('join.confirmationModal.total')}:</span>
-                  <span className="text-[#D4A017]">₹{totalPrice} ({totalDuration} mins)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Actions - Always visible, never cut off */}
-            <div className="flex gap-2 sm:gap-3 pt-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowDemoConfirmation(false)}
-                className="flex-1 min-h-[44px] py-2.5 px-3 rounded-xl border border-[#374151] text-xs font-bold text-gray-300 hover:bg-[#374151] transition-colors cursor-pointer flex items-center justify-center"
-              >
-                {t('join.confirmationModal.close')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDemoConfirmation(false)}
-                className="flex-1 min-h-[44px] py-2.5 px-3 rounded-xl bg-[#D4A017] text-[#111827] text-xs font-black hover:bg-[#B8860B] transition-colors cursor-pointer flex items-center justify-center"
-              >
-                {t('join.confirmationModal.dismiss')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

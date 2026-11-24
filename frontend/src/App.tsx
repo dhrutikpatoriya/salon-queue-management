@@ -9,6 +9,14 @@ import { BarberPage } from './pages/BarberPage';
 import { DisplayPage } from './pages/DisplayPage';
 import { AdminPage } from './pages/AdminPage';
 
+function StatusRedirect() {
+  const activeTicket = typeof window !== 'undefined' ? localStorage.getItem('salon_active_ticket_id') : null;
+  if (activeTicket) {
+    return <Navigate to={`/status/${activeTicket}`} replace />;
+  }
+  return <Navigate to="/join" replace />;
+}
+
 export default function App() {
   return (
     <LanguageProvider>
@@ -18,7 +26,7 @@ export default function App() {
           <Route path="/" element={<StandardLayout><HomePage /></StandardLayout>} />
           <Route path="/join" element={<StandardLayout><JoinPage /></StandardLayout>} />
           <Route path="/status/:id" element={<StandardLayout><StatusPage /></StandardLayout>} />
-          <Route path="/status" element={<Navigate to="/status/S-14" replace />} />
+          <Route path="/status" element={<StatusRedirect />} />
           <Route path="/reception" element={<StandardLayout><ReceptionPage /></StandardLayout>} />
           <Route path="/barber/:name" element={<StandardLayout><BarberPage /></StandardLayout>} />
           <Route path="/barber" element={<Navigate to="/barber/Ravi" replace />} />
