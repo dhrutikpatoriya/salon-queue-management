@@ -210,3 +210,207 @@ This log records every prompt submitted to the AI agent during the development o
 > Only after confirming these points, give me exact commands for safe manual testing of Call Next and No-show.
 >
 > Explain everything in beginner-friendly steps.
+
+---
+
+### Step 5 — Barber View and Waiting Area TV Display Plan
+**Date:** 2026-11-24
+**Prompt:**
+> We are continuing the existing Salon Queue Management System.
+>
+> Steps 1–4 are implemented, manually tested, and pushed to GitHub. The latest committed version is on the main branch.
+>
+> Now prepare the implementation plan for Step 5 — Barber View and Waiting Area TV Display.
+>
+> First read:
+>
+> - AGENTS.md
+> - docs/01-brief.md
+> - docs/02-screens.md
+> - docs/03-flows-rules.md
+>
+> Inspect the existing React + Vite + TypeScript + Tailwind frontend, Express backend, SQLite database schema, staff authentication, queue logic, and Socket.IO infrastructure.
+>
+> Part A — Barber View (/barber/:name):
+>
+> - Mobile-first interface.
+> - Barber-specific authentication and authorization.
+> - Show the current assigned customer, token, services, and service duration.
+> - Start: Called → In Chair.
+> - Done: In Chair → Done.
+> - Toggle Available / On Break only when no active customer is assigned.
+> - Store timestamps and update the queue in real time.
+> - Use atomic database transactions for state changes.
+> - Never allow one barber to modify another barber's assignments.
+>
+> Part B — TV Display (/display):
+>
+> - Fullscreen 1920×1080 layout without normal navigation.
+> - Display on-duty barbers and their active token.
+> - Show the next five waiting tokens in FCFS order.
+> - Highlight newly Called tokens.
+> - Update through Socket.IO with reconnect handling.
+> - Never expose customer names, phone numbers, or private details.
+> - English/Gujarati support.
+> - Charcoal and gold theme.
+>
+> Safety requirements:
+>
+> - Preserve working Steps 1–4.
+> - Never delete or reset existing SQLite customer records.
+> - Use isolated in-memory SQLite for automated tests.
+> - Keep staff and barber credentials out of committed source code.
+> - Do not implement Owner Settings yet.
+> - Do not commit, push, or deploy automatically.
+>
+> Before coding:
+>
+> 1. Explain the proposed backend architecture.
+> 2. Explain barber authentication.
+> 3. List required API endpoints.
+> 4. Explain Start / Done / Break state transitions.
+> 5. Explain TV data privacy.
+> 6. List files to create or modify.
+> 7. Describe automated and manual tests.
+>
+> IMPORTANT: Planning only. Do not modify files or run terminal commands. Wait for my approval before implementation.
+>
+> Explain everything in beginner-friendly English.
+
+---
+
+### Step 5 — Implementation Approval and Mandatory Adjustments
+**Date:** 2026-11-24
+**Prompt:**
+> I have reviewed your Step 5 implementation plan.
+>
+> The overall plan is approved with three mandatory adjustments.
+>
+> 1. TV Waiting Queue:
+>
+> - Display the earliest five Waiting tokens for today in strict FCFS order.
+> - Do not hide a waiting token merely because its preferred barber is on break or off duty.
+> - If a wait estimate is unavailable, show an appropriate label rather than removing the token.
+> - Do not expose customer names, phone numbers, internal IDs, or private data.
+>
+> 2. Barber Authentication:
+>
+> - Ensure each barber uses an individual server-configured credential.
+> - Fail closed if a credential is missing.
+> - Enforce session expiry and logout invalidation on the server.
+> - Enforce rate limiting server-side.
+> - Verify a barber cannot access another barber's assignments, even by changing URL parameters or ticket IDs.
+> - Never commit real credentials or access tokens.
+>
+> 3. TV Real-Time Reliability:
+>
+> - Refresh the TV data when Socket.IO reconnects.
+> - Add a periodic fallback refresh approximately every 30 seconds.
+> - Show a visible reconnecting indicator when connection is lost.
+> - Avoid replaying old Called animations after reconnect.
+>
+> You may now implement Step 5 only.
+>
+> Important:
+>
+> - Preserve all working Steps 1–4.
+> - Do not modify or delete existing SQLite customer records.
+> - Use isolated in-memory SQLite for automated tests.
+> - Use atomic transactions for Called → In Chair → Done.
+> - Prevent a barber from going On Break while an active assignment exists.
+> - Maintain the charcoal and gold theme and English/Gujarati translations.
+> - Do not implement Owner Settings yet.
+> - Do not commit, push, or deploy automatically.
+>
+> After implementation:
+>
+> 1. Run the Step 5 isolated test suite.
+> 2. Rerun Step 4 regression tests.
+> 3. Run frontend and backend production builds.
+> 4. Verify barber authentication, session expiry and logout.
+> 5. Verify Start, Done, and Break transitions.
+> 6. Verify TV next-five FCFS order and privacy.
+> 7. Verify Socket.IO updates and reconnect behaviour.
+> 8. Report exact PASS/FAIL results, changed files, and unresolved issues.
+>
+> Do not claim PASS for tests that were not actually performed.
+
+---
+
+### Step 5 — Isolated Manual Browser Test Setup
+**Date:** 2026-11-24
+**Prompt:**
+> Step 5 automated tests and builds have passed.
+>
+> Before manual browser testing, please help me configure an isolated local Step 5 test environment.
+>
+> 1. Inspect how BARBER_CREDENTIALS is parsed and loaded.
+> 2. Explain exactly how to configure distinct local test PINs for Ravi, Amit, and Imran without exposing real credentials.
+> 3. Verify that NODE_ENV=test uses only in-memory SQLite.
+> 4. Ensure the normal backend/salon.db and its records are not modified.
+> 5. Provide exact commands to start the isolated backend and frontend on my Mac.
+> 6. Do not run destructive database commands.
+> 7. Do not commit, push, or deploy.
+> 8. Do not include actual credentials in logs or responses.
+>
+> Explain the setup in beginner-friendly steps.
+
+---
+
+### Step 5 — Playwright Browser Testing
+**Date:** 2026-11-24
+**Prompt:**
+> Step 5 implementation is complete, and the backend automated tests and production builds have passed.
+>
+> I have limited time, so I want automated browser testing instead of performing the manual walkthrough myself.
+>
+> Please set up and run Playwright end-to-end tests for the existing Salon Queue Management System.
+>
+> Requirements:
+>
+> 1. Inspect the existing project scripts, APIs, authentication configuration, and frontend routing before creating tests.
+> 2. Use a completely isolated, temporary SQLite test database. Never modify or delete my existing backend/salon.db, its WAL/SHM files, or real customer records.
+> 3. Configure separate test-only staff and barber credentials through environment variables. Never hardcode real credentials or print them in logs.
+> 4. Start the backend and frontend using the correct existing development commands. Ensure tests cannot accidentally connect to my regular development backend. Use separate test ports and verify the backend is in test mode before any write operations.
+> 5. Use Playwright to automatically test the complete workflow:
+>    - Receptionist login.
+>    - Add Walk-in customer.
+>    - Call Next for an eligible barber.
+>    - Customer My Status changes to Called.
+>    - Barber-specific login.
+>    - Start Service changes Called → In Chair.
+>    - Done changes In Chair → Done.
+>    - Barber returns to Available.
+>    - Break toggle and active-assignment restrictions.
+>    - Waiting Area TV displays the correct active tokens and first five Waiting tokens.
+>    - TV never displays names, phone numbers, or private customer information.
+>    - Socket.IO updates appear within five seconds.
+>    - TV recovers after disconnection and reconnection.
+> 6. Test screen responsiveness:
+>    - Barber View at 390px and 320px.
+>    - TV Display at 1920×1080.
+>    - English and Gujarati labels on both screens.
+>    - Check for horizontal overflow and unusable controls.
+> 7. Capture screenshots for important states and save them in a test artifacts folder.
+> 8. Use deterministic test fixtures and controlled clock/time configuration wherever necessary, without changing production business rules.
+> 9. Run Step 4 and Step 5 regression tests, plus frontend and backend production builds.
+> 10. If failures occur, identify the root cause and fix only confirmed bugs. Rerun failed tests and relevant regressions.
+> 11. Report:
+>
+> - Number of tests passed, failed, and skipped.
+> - Which browser and viewport sizes were actually tested.
+> - Exact commands executed.
+> - Screenshots generated.
+> - Files created or modified.
+> - Any remaining unverified behaviours.
+>
+> Important restrictions:
+>
+> - Do not modify real SQLite records.
+> - Do not commit, push, or deploy automatically.
+> - Do not falsely report PASS for unexecuted tests.
+> - Preserve existing Steps 1–4 functionality.
+>
+> If Playwright or its browser binaries are unavailable, explain the blocker and try a supported installation method rather than claiming browser tests passed.
+>
+> Proceed with automated testing and provide a clear final report.

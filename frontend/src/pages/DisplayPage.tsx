@@ -1,120 +1,111 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
+import { Globe, Maximize, Scissors } from 'lucide-react';
 import { useTranslation } from '../i18n/LanguageContext';
-import { Link } from 'react-router-dom';
-import { Scissors, Globe, ArrowLeft } from 'lucide-react';
+import type { DisplaySnapshot } from '../types/salon';
+import { subscribeToQueue } from '../utils/liveQueue';
+import { getSocket } from '../utils/socket';
 
-export const DisplayPage: React.FC = () => {
-  const { t, toggleLanguage } = useTranslation();
+export function DisplayPage() {
+  const { t, language, toggleLanguage } = useTranslation();
+  const [data, setData] = useState<DisplaySnapshot | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [highlight, setHighlight] = useState<string[]>([]);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let previous: DisplaySnapshot | undefined;
+    let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+    const live = subscribeToQueue(getSocket(), async (signal, allowHighlight) => {
+      try {
+        const response = await fetch('/api/display', { signal });
+        if (!response.ok) throw new Error('Display unavailable');
+        const snapshot = await response.json() as DisplaySnapshot;
+        if (signal.aborted) return;
+        if (allowHighlight && previous?.date === snapshot.date) {
+          const fresh = snapshot.barbers.filter((barber) => barber.status === 'called' && barber.token &&
+            !previous?.barbers.some((prior) => prior.name === barber.name && prior.token === barber.token && prior.status === 'called'));
+          if (fresh.length) {
+            setHighlight(fresh.map(({ token }) => token!));
+            clearTimeout(highlightTimer);
+            highlightTimer = setTimeout(() => setHighlight([]), 4000);
+          }
+        }
+        previous = snapshot;
+        setData(snapshot);
+        setFailed(false);
+      } catch (error) {
+        if (!signal.aborted) setFailed(true);
+        throw error;
+      }
+    }, (online) => {
+      setConnected(online);
+      if (!online) {
+        clearTimeout(highlightTimer);
+        setHighlight([]);
+      }
+    });
+    const clock = setInterval(() => setNow(new Date()), 1000);
+    return () => {
+      clearTimeout(highlightTimer);
+      clearInterval(clock);
+      live.stop();
+    };
+  }, []);
 
   return (
-    // DEDICATED FULLSCREEN LAYOUT (NO NAVBAR) FOR 1920x1080 TV DISPLAY
-    <div className="min-h-screen bg-[#0B0F17] text-white flex flex-col p-6 sm:p-10 select-none font-sans">
-      {/* Top Header Bar for TV */}
-      <div className="flex items-center justify-between border-b border-[#374151] pb-6">
+    <main className="min-h-screen bg-[#111827] p-5 text-white md:p-10 2xl:p-14">
+      <header className="flex flex-wrap items-center justify-between gap-5 border-b border-gray-600 pb-6">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#D4A017] text-[#111827] flex items-center justify-center shadow-lg">
-            <Scissors className="w-8 h-8" />
-          </div>
+          <Scissors aria-hidden="true" className="h-10 w-10 text-[#D4A017]" />
           <div>
-            <h1 className="text-3xl font-extrabold tracking-wide text-white">{t('salonName')}</h1>
-            <p className="text-sm text-[#D4A017] font-semibold">{t('display.subtitle')}</p>
+            <h1 className="text-3xl font-extrabold lg:text-5xl">{t('salonName')}</h1>
+            <p className="text-xl text-[#F2C754]">{t('display.subtitle')}</p>
           </div>
         </div>
-
-        {/* Exit & Language Switch on TV */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={toggleLanguage}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[#D4A017]/60 text-xs font-semibold bg-[#1F2937] text-[#D4A017] hover:bg-[#D4A017] hover:text-[#111827] transition-all cursor-pointer shadow-md"
-          >
-            <Globe className="w-4 h-4" />
-            <span>{t('languageLabel')}</span>
-          </button>
-          <Link
-            to="/"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1F2937] text-gray-300 hover:text-white border border-[#374151] text-xs font-semibold"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>{t('display.exitTv')}</span>
-          </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          <p className="text-2xl font-semibold tabular-nums">{now.toLocaleTimeString(language === 'gu' ? 'gu-IN' : 'en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' })}</p>
+          {data && <p className="text-xl">{t(data.salonOpen ? 'display.open' : 'display.closed')}</p>}
+          <button className="flex min-h-11 items-center gap-2 rounded-xl border border-gray-500 px-3" onClick={toggleLanguage}><Globe aria-hidden="true" size={20} />{t('languageLabel')}</button>
+          {typeof document.documentElement.requestFullscreen === 'function' && (
+            <button className="min-h-11 rounded-xl border border-gray-500 px-3" aria-label={t('display.fullscreen')} title={t('display.fullscreen')} onClick={() => {
+              void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+            }}><Maximize aria-hidden="true" size={20} /></button>
+          )}
         </div>
-      </div>
+      </header>
 
-      {/* Main TV Screen Content */}
-      <div className="flex-1 grid lg:grid-cols-2 gap-8 my-8 items-stretch">
-        {/* Left Column: Now Serving (In Chair) */}
-        <div className="bg-[#111827] border-2 border-[#D4A017]/60 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-[#374151] pb-4">
-              <span className="text-xl sm:text-2xl font-black text-[#D4A017] uppercase tracking-wider">
-                {t('display.nowServing')}
-              </span>
-              <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
-            </div>
-
-            <div className="space-y-4 pt-2">
-              {[
-                { barber: 'Ravi', token: 'S-12', service: 'Haircut' },
-                { barber: 'Amit', token: 'S-14', service: 'Haircut + Beard' },
-                { barber: 'Imran', token: 'S-15', service: 'Hair Spa' }
-              ].map((item) => (
-                <div
-                  key={item.barber}
-                  className="bg-[#1F2937] border border-[#374151] rounded-2xl p-5 flex items-center justify-between"
-                >
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase font-semibold">{item.barber}</p>
-                    <p className="text-xs text-[#D4A017]">{item.service}</p>
-                  </div>
-                  <div className="text-4xl font-black text-white tracking-widest bg-[#111827] px-4 py-2 rounded-xl border border-[#D4A017]/40">
-                    {item.token}
-                  </div>
+      {(!connected || failed) && <p role="status" className="mt-4 text-xl text-[#F2C754]">{t(!connected ? 'display.reconnecting' : 'display.refreshFailed')}</p>}
+      {!data && !failed && <p role="status" className="mt-4 text-xl">{t('barber.loading')}</p>}
+      {data && (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2 2xl:gap-10">
+          <section className="space-y-4 rounded-3xl border border-[#D4A017]/60 bg-[#1F2937] p-5 2xl:p-8">
+            <h2 className="text-2xl font-bold text-[#F2C754] lg:text-4xl">{t('display.nowServing')}</h2>
+            {data.barbers.length === 0 && <p className="text-2xl">{t('display.noBarbers')}</p>}
+            {data.barbers.map((barber) => (
+              <div key={barber.name} className={`flex min-h-24 items-center justify-between gap-4 rounded-2xl p-4 lg:p-6 ${barber.status === 'called' && barber.token && highlight.includes(barber.token) ? 'bg-[#D4A017] text-[#111827] motion-safe:animate-pulse' : 'bg-[#111827]'}`}>
+                <div>
+                  <p className="text-2xl font-semibold lg:text-3xl">{barber.name}</p>
+                  <p className="text-xl">{t(`barber.state_${barber.status}`)}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="text-xs text-gray-500 pt-4 text-center">
-            {t('common.tvNote')}
-          </div>
-        </div>
-
-        {/* Right Column: Up Next (Next 5 in line) */}
-        <div className="bg-[#111827] border border-[#374151] rounded-3xl p-6 sm:p-8 flex flex-col shadow-2xl">
-          <div className="flex items-center justify-between border-b border-[#374151] pb-4 mb-4">
-            <span className="text-xl sm:text-2xl font-bold text-gray-200 uppercase tracking-wider">
-              {t('display.upNext')}
-            </span>
-            <span className="text-xs text-gray-400">Estimated times</span>
-          </div>
-
-          <div className="space-y-3 flex-1 flex flex-col justify-around">
-            {[
-              { token: 'S-16', barber: 'Any barber', wait: '~10 min' },
-              { token: 'S-17', barber: 'Ravi', wait: '~18 min' },
-              { token: 'S-18', barber: 'Amit', wait: '~25 min' },
-              { token: 'S-19', barber: 'Any barber', wait: '~32 min' },
-              { token: 'S-20', barber: 'Imran', wait: '~40 min' }
-            ].map((queueItem, idx) => (
-              <div
-                key={queueItem.token}
-                className="bg-[#1F2937]/70 border border-[#374151]/80 rounded-2xl p-4 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="w-7 h-7 rounded-full bg-[#374151] text-gray-300 text-xs font-bold flex items-center justify-center">
-                    {idx + 1}
-                  </span>
-                  <div>
-                    <span className="text-xl font-bold text-white tracking-wider">{queueItem.token}</span>
-                    <p className="text-xs text-gray-400">{queueItem.barber}</p>
-                  </div>
-                </div>
-                <span className="text-sm font-semibold text-[#D4A017]">{queueItem.wait}</span>
+                <span className="text-4xl font-black tabular-nums lg:text-6xl">{barber.token ?? '—'}</span>
               </div>
             ))}
-          </div>
+          </section>
+          <section className="space-y-4 rounded-3xl border border-gray-600 bg-[#1F2937] p-5 2xl:p-8">
+            <h2 className="text-2xl font-bold text-[#F2C754] lg:text-4xl">{t('display.upNext')}</h2>
+            {data.waiting.length === 0 && <p className="text-2xl">{t('display.empty')}</p>}
+            <ol className="space-y-3">
+              {data.waiting.map(({ token, approxWaitMinutes }) => (
+                <li key={token} className="flex min-h-20 flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#111827] p-4">
+                  <span className="text-3xl font-black tabular-nums lg:text-5xl">{token}</span>
+                  <span className="text-lg text-[#F2C754] lg:text-2xl">{approxWaitMinutes === null ? t('status.waitUnavailable') : `~${approxWaitMinutes} ${t('display.minutes')}`}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
         </div>
-      </div>
-    </div>
+      )}
+    </main>
   );
-};
+}

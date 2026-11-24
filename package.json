@@ -6,10 +6,12 @@
   "scripts": {
     "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install",
     "dev": "concurrently -k -n \"BACKEND,FRONTEND\" -c \"blue,yellow\" \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "test:e2e": "PLAYWRIGHT_BROWSERS_PATH=0 playwright test",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "concurrently": "^9.1.2"
   }
 }

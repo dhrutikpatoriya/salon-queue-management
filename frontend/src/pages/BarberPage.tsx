@@ -1,75 +1,171 @@
-import React from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from '../i18n/LanguageContext';
-import { Play, CheckSquare, Coffee } from 'lucide-react';
+import type { BarberDashboard } from '../types/salon';
+import { getSocket } from '../utils/socket';
+import { subscribeToQueue } from '../utils/liveQueue';
 
-export const BarberPage: React.FC = () => {
-  const { name } = useParams<{ name: string }>();
-  const { t } = useTranslation();
-  const barberName = name || 'Ravi';
+const button = 'min-h-11 rounded-xl border border-[#D4A017]/60 px-4 py-2 font-semibold text-[#F2C754] disabled:opacity-50';
+const primary = 'min-h-11 rounded-xl bg-[#D4A017] px-4 py-2 font-bold text-[#111827] disabled:opacity-50';
+
+export function BarberPage() {
+  const { name = '' } = useParams();
+  return <BarberSession key={name.toLowerCase()} name={name} />;
+}
+
+function BarberSession({ name }: { name: string }) {
+  const { t, language } = useTranslation();
+  const route = `/api/barber/${encodeURIComponent(name)}`;
+  const [token, setToken] = useState('');
+  const [credential, setCredential] = useState('');
+  const [data, setData] = useState<BarberDashboard | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [pending, setPending] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  const refresh = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    const live = subscribeToQueue(getSocket(), async (signal) => {
+      try {
+        const response = await fetch(`${route}/dashboard`, {
+          signal,
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (signal.aborted) return;
+        if (response.status === 401) {
+          setToken('');
+          setData(null);
+          setActionError('sessionExpired');
+          return;
+        }
+        if (!response.ok) throw new Error('Dashboard unavailable');
+        const dashboard = await response.json() as BarberDashboard;
+        if (signal.aborted) return;
+        setData(dashboard);
+        setNow(Date.now());
+        setLoadError('');
+      } catch (error) {
+        if (!signal.aborted) setLoadError('loadFailed');
+        throw error;
+      }
+    }, setConnected);
+    refresh.current = live.refresh;
+    return () => {
+      refresh.current = null;
+      live.stop();
+    };
+  }, [route, token]);
+
+  const startedAt = data?.assignment?.startedAt;
+  useEffect(() => {
+    if (!startedAt) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
+
+  async function submit(path: string, method: 'POST' | 'PATCH', body?: object) {
+    setPending(true);
+    setActionError('');
+    try {
+      const response = await fetch(`${route}${path}`, {
+        method,
+        headers: {
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        setActionError(typeof result.error === 'string' ? result.error : 'actionFailed');
+        if (response.status === 401 && token) {
+          setToken('');
+          setData(null);
+        } else if (token) {
+          refresh.current?.();
+        }
+        return;
+      }
+      if (path === '/login') {
+        setCredential('');
+        setLoadError('');
+        setToken((await response.json()).token);
+      } else if (path === '/logout') {
+        setToken('');
+        setData(null);
+      } else {
+        refresh.current?.();
+      }
+    } catch {
+      setActionError('actionFailed');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function login(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submit('/login', 'POST', { credential });
+  }
+
+  const assignment = data?.assignment;
+  const elapsedSeconds = startedAt ? Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1000)) : 0;
+  const elapsed = `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`;
+  const errorKey = actionError || (token ? loadError : '');
+  const error = t(`barber.${errorKey}`);
 
   return (
-    <div className="space-y-6 max-w-xl mx-auto">
-      <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#D4A017]/15 border border-[#D4A017]/40 text-[#D4A017] text-xs font-semibold">
-          {t('badge.step1')}
-        </span>
-        <span className="text-xs text-gray-400">Route: /barber/:name</span>
-      </div>
-
-      <div className="bg-[#1F2937] border border-[#374151] rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
-        <div className="flex items-center justify-between border-b border-[#374151] pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-[#D4A017]/20 text-[#D4A017] flex items-center justify-center font-bold text-lg">
-              {barberName[0]}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">{barberName}</h1>
-              <p className="text-xs text-emerald-400 font-medium">On Duty · Available</p>
-            </div>
-          </div>
-          <button
-            disabled
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#374151] text-xs text-gray-300 cursor-not-allowed"
-          >
-            <Coffee className="w-3.5 h-3.5" />
-            <span>{t('barber.toggleBreak')}</span>
-          </button>
+    <section className="mx-auto max-w-xl space-y-4 rounded-2xl border border-[#374151] bg-[#1F2937] p-4 text-white sm:p-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">{data?.name ?? name}</h1>
+          {data && <p className="text-[#F2C754]">{t(`barber.state_${data.status}`)}</p>}
         </div>
-
-        {/* Assigned Customer Card */}
-        <div className="p-4 rounded-xl bg-[#111827] border border-[#374151] space-y-3">
-          <span className="text-xs font-bold text-[#D4A017] uppercase tracking-wider">
-            {t('barber.assignedCustomer')}
-          </span>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-2xl font-bold text-white">Token S-14</p>
-              <p className="text-xs text-gray-400">Haircut + Beard Trim (45 min)</p>
-            </div>
-            <span className="text-xs px-2.5 py-1 rounded-md bg-[#D4A017]/20 text-[#D4A017] font-semibold">
-              Called
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-2">
-            <button
-              disabled
-              className="py-2.5 rounded-xl bg-gradient-to-r from-[#D4A017] to-[#B8860B] text-[#111827] font-bold text-xs cursor-not-allowed flex items-center justify-center gap-1.5"
-            >
-              <Play className="w-3.5 h-3.5" />
-              <span>{t('barber.startService')}</span>
-            </button>
-            <button
-              disabled
-              className="py-2.5 rounded-xl bg-[#374151] text-gray-400 font-bold text-xs cursor-not-allowed flex items-center justify-center gap-1.5"
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-              <span>{t('barber.doneService')}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+        {token && <button className={button} disabled={pending} onClick={() => void submit('/logout', 'POST')}>{t('barber.logout')}</button>}
+      </header>
+      {errorKey && <p role="alert" className="text-red-300">{error.startsWith('barber.') ? t('barber.actionFailed') : error}</p>}
+      {!token ? (
+        <form className="space-y-3" onSubmit={login}>
+          <label className="block font-medium" htmlFor="barber-credential">{t('barber.credential')}</label>
+          <input id="barber-credential" className="min-h-11 w-full rounded-xl border border-gray-500 bg-[#111827] px-3" type="password" required maxLength={128} value={credential} onChange={(event) => setCredential(event.target.value)} />
+          <button className={primary} disabled={pending}>{t('barber.login')}</button>
+        </form>
+      ) : (
+        <>
+          {!connected && <p role="status" className="text-[#F2C754]">{t('display.reconnecting')}</p>}
+          {!data && !loadError && <p role="status">{t('barber.loading')}</p>}
+          {data && (
+            <>
+              <section className="space-y-3 rounded-xl bg-[#111827] p-4">
+                <h2 className="font-bold text-[#F2C754]">{t('barber.assignedCustomer')}</h2>
+                {assignment ? (
+                  <>
+                    <p className="text-3xl font-bold">{assignment.token}</p>
+                    <p>{assignment.customerName} · {t(`barber.state_${assignment.status}`)}</p>
+                    <ul className="list-inside list-disc text-gray-200">
+                      {assignment.services.map((service) => <li key={service.nameEn}>{language === 'gu' ? service.nameGu : service.nameEn}</li>)}
+                    </ul>
+                    <p>{t('barber.duration')}: {assignment.durationMinutes} {t('display.minutes')}</p>
+                    {startedAt && <p>{t('barber.elapsed')}: <span className="tabular-nums">{elapsed}</span></p>}
+                    <button className={`${primary} w-full`} disabled={pending || Boolean(loadError)} onClick={() => void submit(`/assignments/${encodeURIComponent(assignment.id)}/${assignment.status === 'called' ? 'start' : 'done'}`, 'POST')}>
+                      {t(assignment.status === 'called' ? 'barber.startService' : 'barber.doneService')}
+                    </button>
+                  </>
+                ) : <p>{t('barber.noAssignment')}</p>}
+              </section>
+              <p>{t('barber.nextForYou')}: <strong>{data.nextToken ?? '—'}</strong></p>
+              {data.canToggleAvailability && (
+                <button className={`${button} w-full`} disabled={pending || Boolean(loadError)} onClick={() => void submit('/availability', 'PATCH', { status: data.status === 'break' ? 'available' : 'break' })}>
+                  {t(data.status === 'break' ? 'barber.endBreak' : 'barber.startBreak')}
+                </button>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </section>
   );
-};
+}

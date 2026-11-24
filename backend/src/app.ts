@@ -8,6 +8,8 @@ import { healthRouter } from './routes/health.js';
 import { queueRouter } from './routes/queue.js';
 import { salonRouter } from './routes/salon.js';
 import { devTestRouter } from './routes/devTest.js';
+import { barberRouter } from './routes/barber.js';
+import { displayRouter } from './routes/display.js';
 import { receptionRouter } from './routes/reception.js';
 import { initializeDatabaseSchema } from './db/schema.js';
 
@@ -24,6 +26,8 @@ app.use('/api', healthRouter);
 app.use('/api/queue', queueRouter);
 app.use('/api/salon', salonRouter);
 app.use('/api/reception', receptionRouter);
+app.use('/api/barber', barberRouter);
+app.use('/api/display', displayRouter);
 
 // Shortcuts for convenience
 app.use('/api/services', (req, res) => {

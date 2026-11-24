@@ -1,3 +1,4 @@
+import { nextWaitingForBarber } from './queueSelection.js';
 import crypto from 'crypto';
 import { db } from '../db/database.js';
 import { getLocalTodayDate, isSalonOpen } from '../utils/timeUtils.js';
@@ -448,14 +449,7 @@ export function callNextCustomerAtomic(barberId: string) {
     // 3. FCFS earliest eligible waiting customer query
     // Customers selecting Ravi must NEVER be assigned to Amit or Imran!
     // Customers selecting Any barber are eligible for this barber.
-    const candidate = db.prepare(`
-      SELECT * FROM queue_entries
-      WHERE created_date = ?
-        AND status = 'waiting'
-        AND (barber_preference = ? OR barber_preference = 'any')
-      ORDER BY token_number ASC
-      LIMIT 1
-    `).get(today, barberId) as QueueEntryRow | undefined;
+    const candidate = nextWaitingForBarber(today, barberId);
 
     if (!candidate) {
       return {

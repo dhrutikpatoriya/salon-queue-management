@@ -206,7 +206,7 @@ export function joinCustomerQueue(input: JoinQueueInput): {
 /**
  * Calculates FCFS queue position and approximate waiting time according to docs/03-flows-rules.md.
  */
-export function calculateQueuePositionAndTime(ticket: QueueEntryRow): {
+export function calculateQueuePositionAndTime(ticket: Pick<QueueEntryRow, 'status' | 'created_date' | 'created_at' | 'barber_preference'>): {
   position: number;
   approxWaitMinutes: number | null;
   isWaitUnavailable: boolean;

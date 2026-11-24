@@ -126,3 +126,32 @@ export interface ReceptionDashboardData {
     cancelledCount: number;
   };
 }
+
+export type BarberAvailability = 'available' | 'busy' | 'break' | 'off_duty';
+
+export interface BarberDashboard {
+  name: string;
+  status: BarberAvailability;
+  canToggleAvailability: boolean;
+  nextToken: string | null;
+  assignment: {
+    id: string;
+    token: string;
+    customerName: string;
+    status: 'called' | 'in_chair';
+    durationMinutes: number;
+    startedAt: string | null;
+    services: Array<{ nameEn: string; nameGu: string; durationMinutes: number }>;
+  } | null;
+}
+
+export interface DisplaySnapshot {
+  date: string;
+  salonOpen: boolean;
+  barbers: Array<{
+    name: string;
+    status: BarberAvailability | 'called' | 'in_chair';
+    token: string | null;
+  }>;
+  waiting: Array<{ token: string; approxWaitMinutes: number | null }>;
+}

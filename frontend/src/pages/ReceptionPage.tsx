@@ -28,7 +28,7 @@ import {
 import type { ReceptionDashboardData, ReceptionBarberOverview, ReceptionQueueItem } from '../types/salon';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
-const API_BASE = 'http://localhost:5001/api';
+const API_BASE = '/api';
 const SESSION_KEY = 'salon_staff_token';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
