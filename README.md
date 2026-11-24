@@ -1,5 +1,11 @@
 # Salon Queue Management System
+
 **Live demo:** [Salon Queue Management System](https://salon-queue-demo-production.up.railway.app) (hosted on Railway)
+
+**Student Name:** Dhrutik Patoriya  
+**Roll Number:** 202612025  
+**Course:** MSc IT  
+**University:** DAIICT, Gandhinagar
 
 A same-day salon queue with customer self-service, reception controls, individual barber sessions, a public waiting-area display, and owner settings. The app supports English and Gujarati.
 
