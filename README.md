@@ -1,5 +1,5 @@
 # Salon Queue Management System
-**Live demo:** Pending. Add the verified public HTTPS link here after the [hosting setup and phone check](docs/deploy-render.md).
+**Live demo:** Pending. Add the verified public HTTPS link here after the [Railway setup and phone check](docs/deploy-railway.md).
 
 A same-day salon queue with customer self-service, reception controls, individual barber sessions, a public waiting-area display, and owner settings. The app supports English and Gujarati.
 
@@ -56,7 +56,7 @@ If using installed Google Chrome, run `SALON_E2E_BROWSER_CHANNEL=chrome npm run 
 
 ## Deployment and submission
 
-- [₹0 hosting options, Render limitations, health checks and backups](docs/deploy-render.md)
+- [Railway Free setup, persistence and verification](docs/deploy-railway.md)
 - [Three-minute mobile demo script](docs/demo-script.md)
 - [Half-page reflection](docs/reflection.md)
 - [Prompt history](prompts.md)

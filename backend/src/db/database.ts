@@ -1,4 +1,4 @@
-import { production } from '../config/environment.js';
+import { onRailway, production } from '../config/environment.js';
 import Database from 'better-sqlite3';
 import path from 'path';
 import { tmpdir } from 'node:os';
@@ -23,11 +23,12 @@ function productionDatabasePath() {
   if (directory !== path.dirname(filename) || filename === path.resolve(__dirname, '../../salon.db')) {
     throw new Error('Production requires a dedicated SQLite directory');
   }
-  if (process.env.RENDER === 'true') {
-    // A writable directory alone could still be on Render’s ephemeral filesystem.
+  if (onRailway || process.env.RENDER === 'true') {
+    // A writable directory alone could still be on the host's ephemeral filesystem.
     if (directory !== '/var/data' || process.platform !== 'linux' ||
+        (onRailway && process.env.RAILWAY_VOLUME_MOUNT_PATH !== '/var/data') ||
         !fs.readFileSync('/proc/self/mountinfo', 'utf8').split('\n').some((line) => line.split(' ')[4] === directory)) {
-      throw new Error('Render persistent disk is not mounted at /var/data');
+      throw new Error('Production persistent disk is not mounted at /var/data');
     }
   }
   fs.accessSync(directory, fs.constants.W_OK | fs.constants.X_OK);

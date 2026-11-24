@@ -20,6 +20,7 @@ function environment(overrides: NodeJS.ProcessEnv) {
   return {
     ...process.env,
     NODE_ENV: 'production', RENDER: 'false', RENDER_EXTERNAL_URL: '', PUBLIC_ORIGIN: origin, PORT: '0',
+    RAILWAY_PROJECT_ID: '', RAILWAY_PUBLIC_DOMAIN: '', RAILWAY_VOLUME_MOUNT_PATH: '',
     SALON_PERSISTENCE_TEST_DIR: '', SQLITE_DB_PATH: '', ENABLE_DEV_TEST: 'true',
     BOOTSTRAP_CREDENTIALS: 'false', OWNER_PASSWORD: '', STAFF_PIN: '', BARBER_CREDENTIALS: '',
     ...overrides,
@@ -35,6 +36,9 @@ test('production refuses missing, unsafe, or unmounted database configuration', 
       [{ SQLITE_DB_PATH: path, PUBLIC_ORIGIN: 'http://localhost' }, /requires one HTTPS origin/],
       [{ SQLITE_DB_PATH: path, RENDER: 'true' }, /persistent disk is not mounted/],
       [{ SQLITE_DB_PATH: path, RENDER: 'true', NODE_ENV: 'development' }, /requires NODE_ENV=production/],
+      [{ SQLITE_DB_PATH: path, RAILWAY_PROJECT_ID: 'fixture', NODE_ENV: 'development' }, /Railway requires NODE_ENV=production/],
+      [{ SQLITE_DB_PATH: path, RAILWAY_PROJECT_ID: 'fixture', RAILWAY_PUBLIC_DOMAIN: 'salon-fixture.invalid',
+        PUBLIC_ORIGIN: '', RAILWAY_VOLUME_MOUNT_PATH: '/var/data' }, /persistent disk is not mounted/],
     ] as const) {
       const result = spawnSync(process.execPath, [entry], { env: environment(overrides), encoding: 'utf8', timeout: 5000 });
       assert.equal(result.status, 1);
