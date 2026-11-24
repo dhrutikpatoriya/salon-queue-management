@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { app } from '../app.js';
 import { getQueueTicket, cancelQueueTicket, joinCustomerQueue } from '../services/queueService.js';
 import { db } from '../db/database.js';
@@ -318,6 +319,8 @@ async function runTests() {
 
   // Test 11: Dev Test Endpoint Security & Header Verification via Express dispatch
   try {
+    const testSecret = randomBytes(32).toString('hex');
+    process.env.DEV_TEST_SECRET = testSecret;
     process.env.ENABLE_DEV_TEST = 'true';
     process.env.NODE_ENV = 'development';
 
@@ -330,7 +333,7 @@ async function runTests() {
       app,
       'POST',
       '/api/dev/call-customer/nonexistent_id',
-      { 'x-dev-test': 'salon-dev-secret-step3' }
+      { 'x-dev-test': testSecret }
     );
     const routeActive = resValidHeader.status === 404 && resValidHeader.body?.error === 'Ticket not found';
 
@@ -340,7 +343,7 @@ async function runTests() {
       app,
       'POST',
       `/api/dev/call-customer/${ticket5.id}`,
-      { 'x-dev-test': 'salon-dev-secret-step3' },
+      { 'x-dev-test': testSecret },
       { barberId: 'ravi' }
     );
     const callSucceeded = resCall.status === 200 && resCall.body?.ticket?.status === 'called';

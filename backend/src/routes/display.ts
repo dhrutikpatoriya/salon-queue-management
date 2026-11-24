@@ -3,5 +3,6 @@ import { getDisplayData } from '../services/displayService.js';
 
 export const displayRouter = Router();
 displayRouter.get('/', (_req, res) => {
-  res.set('Cache-Control', 'no-store').json(getDisplayData());
+  const { snapshot, refreshAfterMs } = getDisplayData();
+  res.set('Cache-Control', 'no-store').set('X-Salon-Refresh-After-Ms', String(refreshAfterMs)).json(snapshot);
 });

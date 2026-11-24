@@ -1,7 +1,10 @@
 import { app } from '../app.js';
 import { db } from '../db/database.js';
 import { getQueueTicket, cancelQueueTicket, joinCustomerQueue } from '../services/queueService.js';
-import { DEV_TEST_SECRET } from '../utils/devSecurity.js';
+import { randomBytes } from 'node:crypto';
+
+const DEV_TEST_SECRET = randomBytes(32).toString('hex');
+process.env.DEV_TEST_SECRET = DEV_TEST_SECRET;
 import { setupSocketIO, broadcastQueueUpdate } from '../socket/socketHandler.js';
 import http from 'http';
 
@@ -282,6 +285,7 @@ async function runSecurityIntegrationReview() {
     );
 
     // 3.2 Production guard: Completely 404 Not Found when NODE_ENV=production
+    process.env.ENABLE_DEV_TEST = 'true';
     process.env.NODE_ENV = 'production';
     const devInProd = await dispatch(
       app,
@@ -334,6 +338,14 @@ async function runSecurityIntegrationReview() {
       pass3_4,
       `HTTP status: ${devWrongSecret.status}`
     );
+
+    const shortcut = await dispatch(app, 'POST', `/api/dev/call-customer/${newCust.ticket.id}`, { 'x-dev-test': 'true' });
+    recordTest('Dev Endpoint Hardening', 'Former shortcut header is rejected', shortcut.status === 403, `HTTP status: ${shortcut.status}`);
+
+    delete process.env.ENABLE_DEV_TEST;
+    const disabled = await dispatch(app, 'POST', `/api/dev/call-customer/${newCust.ticket.id}`, { 'x-dev-test': DEV_TEST_SECRET });
+    recordTest('Dev Endpoint Hardening', 'Development requires explicit opt-in', disabled.status === 404, `HTTP status: ${disabled.status}`);
+    process.env.ENABLE_DEV_TEST = 'true';
 
     // 3.5 Reject if request comes from external IP (non-localhost)
     const devExternalIp = await dispatch(

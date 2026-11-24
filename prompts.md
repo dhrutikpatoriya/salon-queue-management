@@ -414,3 +414,105 @@ This log records every prompt submitted to the AI agent during the development o
 > If Playwright or its browser binaries are unavailable, explain the blocker and try a supported installation method rather than claiming browser tests passed.
 >
 > Proceed with automated testing and provide a clear final report.
+
+---
+
+### Step 6 — Owner Settings and Final Testing Approval
+**Date:** 2026-11-24
+**Prompt:**
+> I reviewed your Step 6 Owner Settings implementation plan.
+>
+> The plan is approved with these mandatory adjustments:
+>
+> 1. Separate physical opening hours from the manual online-joining switch. Before reusing salon_settings.is_open, inspect its existing semantics throughout the codebase. If needed, add a separate persistent setting with a backward-compatible, non-destructive migration. Disabling online joining must not prevent reception walk-ins during physical operating hours.
+> 2. Make saved opening and closing times authoritative across frontend and backend, including the 30-minute online-joining cutoff. Use Asia/Kolkata consistently. Verify opening, cutoff and closing boundaries using a controlled clock. Preserve existing accepted queue tickets.
+> 3. Add a settings persistence test using a completely disposable SQLite file in the OS temporary directory. Verify settings survive backend/database reinitialization and a process restart. Never use, overwrite, delete, or migrate the existing backend/salon.db for this test.
+>
+> You may now implement Step 6 — Owner Settings and Final Testing.
+>
+> Implement:
+>
+> - Secure owner-only authentication and session management.
+> - Services management with price, duration and active status.
+> - Barber on-duty/off-duty management.
+> - Editable salon operating hours.
+> - Manual online-joining control.
+> - Today's queue statistics and average wait.
+> - Live synchronization with Home, Join, Reception, Barber, My Status and TV.
+> - English/Gujarati translations.
+> - Responsive Owner Dashboard.
+>
+> Safety requirements:
+>
+> - Preserve all working Steps 1–5.
+> - Never delete or reset existing queue records.
+> - Preserve booked service prices, durations and barber preferences.
+> - Reject taking a barber off duty while handling an active ticket.
+> - Use server-side authorization and validation for all owner actions.
+> - Keep actual credentials out of source code and logs.
+> - Inspect and safely stop any regular backend watcher using the real database before modifying backend files.
+> - Use in-memory SQLite for ordinary automated tests and a disposable SQLite file for persistence verification.
+> - Do not commit, push or deploy automatically.
+>
+> Verification:
+>
+> 1. Run Step 6 backend integration tests.
+> 2. Run Playwright automated browser tests for Owner Settings.
+> 3. Rerun Step 4 and Step 5 regression tests.
+> 4. Run existing Playwright E2E tests.
+> 5. Run frontend and backend production builds.
+> 6. Check that customer privacy and authentication remain intact.
+> 7. Verify the actual database and its WAL/SHM files were preserved.
+> 8. Record the implementation prompt in prompts.md.
+>
+> Fix confirmed test failures, then report exact PASS/FAIL/SKIPPED counts, changed files and remaining issues.
+>
+> Proceed with implementation and testing now. Do not claim that unexecuted checks passed.
+
+---
+
+### Credential Remediation Before Step 6 Commit
+**Date:** 2026-11-24
+**Prompt:**
+> The Git security check correctly stopped because STAFF_PIN and DEV_TEST_SECRET in .env.example match the actual credentials in my local .env, and these template values exist in Git history.
+>
+> Please perform a safe credential remediation before committing Step 6.
+>
+> 1. Inspect the application's environment loading and credential usage.
+> 2. Replace STAFF_PIN and DEV_TEST_SECRET in .env.example with empty placeholders. Also ensure OWNER_PASSWORD and BARBER_CREDENTIALS are placeholders only.
+> 3. Generate strong, unique replacement values for STAFF_PIN and DEV_TEST_SECRET using a cryptographically secure generator.
+> 4. Update my local, git-ignored .env with the new values. Preserve all unrelated configuration and existing owner/barber credentials.
+> 5. Do not print, log, or expose any secret values in the conversation or terminal output.
+> 6. Verify .env remains ignored by Git.
+> 7. Verify no actual credential in .env.example matches a local credential.
+> 8. Check whether the previously exposed DEV_TEST_SECRET enables any production-accessible development endpoint. Ensure development test endpoints are disabled in production and protected appropriately in development.
+> 9. Run relevant authentication/security tests and frontend/backend production builds.
+> 10. Verify the real SQLite database and its WAL/SHM files are unchanged.
+> 11. Do not delete or reset database records.
+> 12. Do not commit, push, force-push, or rewrite Git history.
+>
+> If the existing credentials are used anywhere beyond the local environment, report the required rotation steps without revealing the values.
+>
+> After completing remediation, provide a concise PASS/FAIL report. Do not include secret values.
+
+---
+
+### Publish Completed Step 6 Changes
+**Date:** 2026-11-24
+**Prompt:**
+> Credential remediation is complete.
+>
+> Now safely commit and push the remaining Step 6 changes to origin/main.
+>
+> - Verify current branch and remote synchronization.
+> - Confirm Step 5 is already committed.
+> - Stage only Step 6 source code, configuration templates, translations, tests, and prompts.md.
+> - Exclude all actual .env files, credentials, SQLite database files, WAL/SHM files, PDFs, ZIP archives, screenshots, node_modules, dist and test artifacts.
+> - Scan staged changes for exposed secrets.
+> - Check git diff --cached --check.
+> - If all checks pass, commit using: Implement secure Owner Settings and salon configuration
+> - Push to origin/main without force.
+> - Verify the final commit hash and Git status.
+> - Stop and report any security concern or remote divergence instead of pushing.
+>
+> Do not modify or reset the real SQLite database.

@@ -1,7 +1,7 @@
 import { nextWaitingForBarber } from './queueSelection.js';
 import crypto from 'crypto';
 import { db } from '../db/database.js';
-import { getLocalTodayDate, isSalonOpen } from '../utils/timeUtils.js';
+import { getLocalTodayDate, getPhysicalClosureReason, getSalonOperatingStatus, isSalonOpen } from '../utils/timeUtils.js';
 import { ServiceRecord, BarberRecord, QueueEntryRow } from './queueService.js';
 
 export interface ReceptionBarberOverview {
@@ -49,6 +49,7 @@ export interface ReceptionQueueItem {
 export interface ReceptionDashboardData {
   salonOpen: boolean;
   salonMessage?: string;
+  refreshAfterMs: number;
   todayDate: string;
   barbers: ReceptionBarberOverview[];
   queue: ReceptionQueueItem[];
@@ -68,7 +69,7 @@ export interface ReceptionDashboardData {
  */
 export function getReceptionDashboardData(): ReceptionDashboardData {
   const today = getLocalTodayDate();
-  const salonCheck = isSalonOpen();
+  const salonStatus = getSalonOperatingStatus();
   const nowMs = Date.now();
 
   // 1. Fetch all barbers and their today's active assignments
@@ -167,7 +168,7 @@ export function getReceptionDashboardData(): ReceptionDashboardData {
   const queue: ReceptionQueueItem[] = tickets.map((t) => {
     // Services for ticket
     const services = db.prepare(`
-      SELECT s.id, s.name_en, s.name_gu, s.category, s.duration_minutes, s.price
+      SELECT s.id, s.name_en, s.name_gu, s.category, qs.duration_minutes, qs.price
       FROM services s
       JOIN queue_services qs ON s.id = qs.service_id
       WHERE qs.queue_id = ?
@@ -252,8 +253,9 @@ export function getReceptionDashboardData(): ReceptionDashboardData {
   };
 
   return {
-    salonOpen: salonCheck.open,
-    salonMessage: salonCheck.reason,
+    salonOpen: salonStatus.salonOpen,
+    salonMessage: getPhysicalClosureReason(salonStatus),
+    refreshAfterMs: salonStatus.refreshAfterMs,
     todayDate: today,
     barbers,
     queue,
@@ -313,7 +315,7 @@ export function registerWalkInCustomer(input: {
 
   const barberPref = (input.barberPreference || 'any').trim().toLowerCase();
   if (barberPref !== 'any') {
-    const barberCheck = db.prepare(`SELECT id, is_on_duty FROM barbers WHERE id = ?`).get(barberPref) as
+    const barberCheck = db.prepare(`SELECT id, is_on_duty FROM barbers WHERE id = ? AND status != 'off_duty'`).get(barberPref) as
       | { id: string; is_on_duty: number }
       | undefined;
     if (!barberCheck || barberCheck.is_on_duty === 0) {

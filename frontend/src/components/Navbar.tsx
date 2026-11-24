@@ -44,9 +44,7 @@ export const Navbar: React.FC = () => {
               <span className="font-bold text-sm sm:text-base tracking-wide text-white group-hover:text-[#D4A017] transition-colors truncate block">
                 {t('salonName')}
               </span>
-              <p className="text-[10px] sm:text-xs text-[#9CA3AF] -mt-0.5 truncate block">
-                {t('openStatus')}
-              </p>
+
             </div>
           </Link>
 

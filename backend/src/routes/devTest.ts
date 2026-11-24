@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../db/database.js';
 import { broadcastQueueUpdate } from '../socket/socketHandler.js';
-import { isDevTestEnabled, DEV_TEST_SECRET } from '../utils/devSecurity.js';
+import { isDevTestEnabled, matchesDevTestSecret } from '../utils/devSecurity.js';
 
 export const devTestRouter = Router();
 
@@ -24,21 +24,18 @@ devTestRouter.use((req: Request, res: Response, next: NextFunction) => {
  */
 devTestRouter.post('/call-customer/:id', (req: Request, res: Response) => {
   // 1. Localhost binding verification
-  const remoteIp = req.socket.remoteAddress || req.ip || '';
+  const remoteIp = req.socket.remoteAddress || '';
   const isLocal =
     remoteIp === '127.0.0.1' ||
     remoteIp === '::1' ||
-    remoteIp === '::ffff:127.0.0.1' ||
-    req.hostname === 'localhost' ||
-    req.hostname === '127.0.0.1';
+    remoteIp === '::ffff:127.0.0.1';
 
-  if (!isLocal && process.env.NODE_ENV !== 'test') {
+  if (!isLocal) {
     return res.status(403).json({ error: 'Dev endpoints only accessible from localhost' });
   }
 
   // 2. Secret header verification
-  const devAuth = req.headers['x-dev-test'];
-  if (!devAuth || (devAuth !== DEV_TEST_SECRET && devAuth !== 'true')) {
+  if (!matchesDevTestSecret(req.headers['x-dev-test'])) {
     return res.status(403).json({ error: 'Unauthorized: Invalid dev test secret' });
   }
 

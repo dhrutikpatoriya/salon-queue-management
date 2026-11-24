@@ -8,6 +8,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from '../i18n/LanguageContext';
+import { subscribeToQueue } from '../utils/liveQueue';
 import { getSocket } from '../utils/socket';
 import {
   Lock,
@@ -567,7 +568,7 @@ export const ReceptionPage: React.FC = () => {
   const [fetchError, setFetchError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Available services for walk-in modal (fetched once)
+  // Live service catalog for the walk-in modal
   const [availableServices, setAvailableServices] = useState<Array<{
     id: string; name_en: string; name_gu: string; duration_minutes: number; price: number;
   }>>([]);
@@ -598,28 +599,29 @@ export const ReceptionPage: React.FC = () => {
       .finally(() => setAuthChecked(true));
   }, []);
 
-  // ── Fetch services list once logged in (for walk-in modal) ──────────────────
-  useEffect(() => {
-    if (!staffToken) return;
-    fetch(`${API_BASE}/salon/services`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.services) setAvailableServices(d.services);
-      })
-      .catch(() => {});
-  }, [staffToken]);
-
   // ── Fetch dashboard data ─────────────────────────────────────────────────────
-  const fetchDashboard = useCallback(async (token: string) => {
+  const fetchDashboard = useCallback(async (token: string, signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/reception/dashboard`, { headers: authHeaders(token) });
+      const [res, servicesResponse] = await Promise.all([
+        fetch(`${API_BASE}/reception/dashboard`, { headers: authHeaders(token), signal }),
+        fetch(`${API_BASE}/salon/services`, { signal, cache: 'no-store' }),
+      ]);
+      if (signal?.aborted) return;
       if (res.status === 401) { clearToken(); setStaffToken(null); return; }
       const json = await res.json();
-      if (json.success) { setData(json.data); setFetchError(''); }
-      else setFetchError(json.error || 'Failed to load dashboard');
+      if (!json.success || !servicesResponse.ok) {
+        setFetchError('settings.loadFailed');
+        return;
+      }
+      const serviceData = await servicesResponse.json();
+      if (signal?.aborted) return;
+      setData(json.data);
+      setAvailableServices(serviceData.services);
+      setFetchError('');
+      return json.data.refreshAfterMs as number;
     } catch {
-      setFetchError('Network error — retrying on next update');
+      if (!signal?.aborted) setFetchError('settings.loadFailed');
     } finally {
       setLoading(false);
     }
@@ -628,12 +630,8 @@ export const ReceptionPage: React.FC = () => {
   // ── Auto-fetch when logged in and on socket updates ─────────────────────────
   useEffect(() => {
     if (!staffToken) return;
-    fetchDashboard(staffToken);
-
-    const socket = getSocket();
-    const handler = () => fetchDashboard(staffToken);
-    socket.on('queue:updated', handler);
-    return () => { socket.off('queue:updated', handler); };
+    const live = subscribeToQueue(getSocket(), (signal) => fetchDashboard(staffToken, signal), () => {});
+    return () => live.stop();
   }, [staffToken, fetchDashboard]);
 
   // ── Grace countdown live timer (re-renders every second when called tickets exist) ──
@@ -847,8 +845,9 @@ export const ReceptionPage: React.FC = () => {
               <Globe className="w-3.5 h-3.5" />{t('languageLabel')}
             </button>
             <button
+              disabled={!data?.salonOpen}
               onClick={() => setShowWalkIn(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4A017] text-[#111827] text-xs font-bold hover:opacity-90 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4A017] text-[#111827] text-xs font-bold hover:opacity-90 cursor-pointer disabled:opacity-50"
             >
               <PlusCircle className="w-3.5 h-3.5" />{t('reception.addWalkIn')}
             </button>
@@ -865,7 +864,7 @@ export const ReceptionPage: React.FC = () => {
       {/* ── Global error ── */}
       {fetchError && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />{fetchError}
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />{t(fetchError)}
         </div>
       )}
 

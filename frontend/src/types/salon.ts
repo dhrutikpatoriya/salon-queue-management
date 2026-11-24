@@ -59,6 +59,7 @@ export interface QueueTicketDetails {
   approxWaitMinutes: number | null;
   isWaitUnavailable: boolean;
   waitReason?: string;
+  waitReasonCode?: 'noneWorking' | 'preferredOffDuty' | 'preferredOnBreak';
   shouldStartComing: boolean;
   isYourTurn: boolean;
   createdAt: string;
@@ -113,6 +114,7 @@ export interface ReceptionQueueItem {
 export interface ReceptionDashboardData {
   salonOpen: boolean;
   salonMessage?: string;
+  refreshAfterMs: number;
   todayDate: string;
   barbers: ReceptionBarberOverview[];
   queue: ReceptionQueueItem[];
@@ -154,4 +156,42 @@ export interface DisplaySnapshot {
     token: string | null;
   }>;
   waiting: Array<{ token: string; approxWaitMinutes: number | null }>;
+}
+
+export type ServiceCategory = 'hair' | 'beard' | 'spa' | 'color';
+export type SalonClosure = 'beforeOpening' | 'afterClosing' | 'onlineDisabled' | 'onlineCutoff';
+
+export interface CatalogService extends QueueServiceItem {
+  category: ServiceCategory;
+}
+
+export interface CatalogBarber {
+  id: string;
+  name: string;
+  status: BarberAvailability;
+}
+
+export interface OperatingStatus {
+  openTime: string;
+  closeTime: string;
+  cutoffTime: string;
+  onlineJoiningEnabled: boolean;
+  salonOpen: boolean;
+  isOnlineJoiningOpen: boolean;
+  reasonCode: SalonClosure | null;
+  refreshAfterMs: number;
+}
+
+export interface PublicSalonStatus extends OperatingStatus {
+  waitingCount: number;
+  approxWaitMinutes: number | null;
+  barberWaitMinutes: Record<string, number | null>;
+}
+
+export interface OwnerDashboard {
+  date: string;
+  settings: OperatingStatus;
+  services: Array<CatalogService & { is_active: 0 | 1 }>;
+  barbers: Array<CatalogBarber & { is_on_duty: 0 | 1; hasActiveAssignment: boolean }>;
+  stats: Record<QueueStatus, number> & { averageWaitMinutes: number | null };
 }

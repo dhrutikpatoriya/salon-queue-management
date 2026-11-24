@@ -13,18 +13,16 @@ import {
   Bell,
   RefreshCw,
   Loader2,
-  Sparkles,
   Info,
   ShieldAlert,
-  ChevronRight,
-  PhoneCall
+  ChevronRight
 } from 'lucide-react';
 
 export const StatusPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const isExistingSpot = searchParams.get('existing') === 'true';
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const [ticket, setTicket] = useState<QueueTicketDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,8 +30,6 @@ export const StatusPage: React.FC = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
-  const [devCallLoading, setDevCallLoading] = useState(false);
-  const [devCallSuccess, setDevCallSuccess] = useState(false);
 
   // Retrieve stored customer access token for this ticket
   const accessToken = useMemo(() => {
@@ -77,6 +73,7 @@ export const StatusPage: React.FC = () => {
     };
 
     socket.on('queue:updated', handleQueueUpdated);
+    socket.on('connect', handleQueueUpdated);
 
     // Refresh when user returns to tab
     const handleVisibilityChange = () => {
@@ -93,6 +90,7 @@ export const StatusPage: React.FC = () => {
 
     return () => {
       socket.off('queue:updated', handleQueueUpdated);
+      socket.off('connect', handleQueueUpdated);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
     };
@@ -132,30 +130,6 @@ export const StatusPage: React.FC = () => {
     }
   };
 
-  // Developer Test Handler: Simulate Calling Customer
-  const handleDevSimulateCall = async () => {
-    if (!id) return;
-    setDevCallLoading(true);
-    try {
-      const res = await fetch(`/api/dev/call-customer/${id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-dev-test': 'salon-dev-secret-step3'
-        }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setDevCallSuccess(true);
-        setTimeout(() => setDevCallSuccess(false), 4000);
-        fetchTicket();
-      }
-    } catch (err) {
-      console.error('Dev test call failed:', err);
-    } finally {
-      setDevCallLoading(false);
-    }
-  };
 
   // Helper for status badge styling
   const getStatusBadge = (status: QueueStatus) => {
@@ -249,8 +223,6 @@ export const StatusPage: React.FC = () => {
   }
 
   const badge = getStatusBadge(ticket.status);
-  const isDevEnvironment =
-    Boolean((import.meta as any).env?.DEV) || window.location.hostname === 'localhost';
 
   return (
     <div className="space-y-5 max-w-xl mx-auto pb-12 w-full min-w-0">
@@ -440,7 +412,7 @@ export const StatusPage: React.FC = () => {
                       {t('status.waitUnavailable')}
                     </p>
                     <p className="text-[9px] text-gray-500">
-                      {ticket.waitReason || 'Barbers on break'}
+                      {ticket.waitReasonCode ? t(`settings.${ticket.waitReasonCode}`) : t('status.waitUnavailable')}
                     </p>
                   </div>
                 ) : (
@@ -584,7 +556,7 @@ export const StatusPage: React.FC = () => {
           <div className="space-y-1.5 text-xs">
             {ticket.services.map((s) => (
               <div key={s.id} className="flex justify-between items-center text-gray-300">
-                <span className="truncate pr-2">{s.name_en}</span>
+                <span className="truncate pr-2">{language === 'gu' ? s.name_gu : s.name_en}</span>
                 <span className="text-[#D4A017] font-semibold shrink-0">₹{s.price}</span>
               </div>
             ))}
@@ -592,7 +564,7 @@ export const StatusPage: React.FC = () => {
 
           <div className="border-t border-[#374151]/80 pt-2 flex justify-between items-center text-xs sm:text-sm font-extrabold">
             <span className="text-gray-300">
-              {t('status.total')} ({ticket.totalDurationMinutes} mins)
+              {t('status.total')} ({ticket.totalDurationMinutes} {t('home.minutes')})
             </span>
             <span className="text-[#D4A017] text-base">₹{ticket.totalPrice}</span>
           </div>
@@ -634,37 +606,6 @@ export const StatusPage: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Developer Test Tools (Visible in Development for easy grading and demo) */}
-      {isDevEnvironment && ticket.status === 'waiting' && (
-        <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/30 text-purple-200 text-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold flex items-center gap-1.5 text-purple-300">
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              Dev Test Simulator
-            </span>
-            <span className="text-[10px] bg-purple-500/20 px-2 py-0.5 rounded text-purple-300 font-mono">
-              Dev Only
-            </span>
-          </div>
-          <p className="text-[11px] text-purple-300/80">
-            Simulate barber calling this ticket to verify the &ldquo;It&apos;s your turn!&rdquo; notification banner.
-          </p>
-          <button
-            type="button"
-            onClick={handleDevSimulateCall}
-            disabled={devCallLoading}
-            className="w-full py-2 px-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-          >
-            {devCallLoading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <PhoneCall className="w-3.5 h-3.5" />
-            )}
-            <span>{devCallSuccess ? t('status.devTestCalled') : t('status.devTestCallBtn')}</span>
-          </button>
-        </div>
-      )}
 
       {/* Cancel Spot Confirmation Modal */}
       {showCancelModal && (

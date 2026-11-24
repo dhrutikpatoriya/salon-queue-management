@@ -55,7 +55,8 @@ queueRouter.post('/join', (req: Request, res: Response) => {
     const status = error.statusCode || 500;
     return res.status(status).json({
       success: false,
-      error: error.message || 'Failed to join queue'
+      error: error.message || 'Failed to join queue',
+      reasonCode: error.reasonCode
     });
   }
 });

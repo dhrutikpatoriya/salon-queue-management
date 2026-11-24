@@ -1,5 +1,5 @@
 import { db } from '../db/database.js';
-import { getLocalTodayDate, isSalonOpen } from '../utils/timeUtils.js';
+import { getLocalTodayDate, getSalonOperatingStatus } from '../utils/timeUtils.js';
 import { activeAssignment } from './queueSelection.js';
 import { calculateQueuePositionAndTime } from './queueService.js';
 import type { BarberRecord, QueueEntryRow } from './queueService.js';
@@ -13,14 +13,15 @@ const readDisplay = db.transaction(() => {
   `).all() as Pick<BarberRecord, 'id' | 'name' | 'status'>[];
 
   const waiting = db.prepare(`
-    SELECT created_date, created_at, barber_preference, token_display, status
+    SELECT created_date, created_at, barber_preference, token_number, token_display, status
     FROM queue_entries WHERE created_date = ? AND status = 'waiting'
     ORDER BY token_number ASC LIMIT 5
-  `).all(today) as Pick<QueueEntryRow, 'created_date' | 'created_at' | 'barber_preference' | 'token_display' | 'status'>[];
+  `).all(today) as Pick<QueueEntryRow, 'created_date' | 'created_at' | 'barber_preference' | 'token_number' | 'token_display' | 'status'>[];
 
-  return {
+  const salonStatus = getSalonOperatingStatus();
+  const snapshot = {
     date: today,
-    salonOpen: isSalonOpen().open,
+    salonOpen: salonStatus.salonOpen,
     barbers: barbers.map((barber) => {
       const active = activeAssignment(barber.id);
       return {
@@ -34,6 +35,7 @@ const readDisplay = db.transaction(() => {
       approxWaitMinutes: calculateQueuePositionAndTime(ticket).approxWaitMinutes,
     })),
   };
+  return { snapshot, refreshAfterMs: salonStatus.refreshAfterMs };
 });
 
 export function getDisplayData() {

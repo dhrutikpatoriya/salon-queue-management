@@ -34,6 +34,7 @@ export function DisplayPage() {
         previous = snapshot;
         setData(snapshot);
         setFailed(false);
+        return Number(response.headers.get('X-Salon-Refresh-After-Ms'));
       } catch (error) {
         if (!signal.aborted) setFailed(true);
         throw error;

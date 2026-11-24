@@ -4,6 +4,7 @@ dotenv.config({ path: '../.env' });
 
 import express from 'express';
 import cors from 'cors';
+import { adminRouter } from './routes/admin.js';
 import { healthRouter } from './routes/health.js';
 import { queueRouter } from './routes/queue.js';
 import { salonRouter } from './routes/salon.js';
@@ -28,6 +29,7 @@ app.use('/api/salon', salonRouter);
 app.use('/api/reception', receptionRouter);
 app.use('/api/barber', barberRouter);
 app.use('/api/display', displayRouter);
+app.use('/api/admin', adminRouter);
 
 // Shortcuts for convenience
 app.use('/api/services', (req, res) => {

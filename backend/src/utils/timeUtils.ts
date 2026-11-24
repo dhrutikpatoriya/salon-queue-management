@@ -1,70 +1,74 @@
+import { getSalonSettings, ONLINE_CUTOFF_MINUTES, timeInMinutes } from '../services/salonSettingsService.js';
+
 export const SALON_TIMEZONE = 'Asia/Kolkata';
 
-/**
- * Returns today's date formatted as 'YYYY-MM-DD' in the salon's local timezone (Asia/Kolkata).
- */
-export function getLocalTodayDate(): string {
-  const now = new Date();
+export function getLocalTodayDate(now = new Date()): string {
   return now.toLocaleDateString('en-CA', { timeZone: SALON_TIMEZONE });
 }
 
-/**
- * Checks whether the physical salon is currently open (9:00 AM – 9:00 PM).
- * Walk-ins can register as long as the salon is open.
- */
-export function isSalonOpen(): { open: boolean; reason?: string } {
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('en-GB', {
-    timeZone: SALON_TIMEZONE,
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  if (timeStr < '09:00') {
-    return {
-      open: false,
-      reason: 'Salon is closed. Opens at 9:00 AM.'
-    };
-  }
-
-  if (timeStr >= '21:00') {
-    return {
-      open: false,
-      reason: 'Salon is closed for the day (Closed at 9:00 PM).'
-    };
-  }
-
-  return { open: true };
+function clockLabel(minutes: number) {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
-/**
- * Checks whether online queue joining is allowed based on operating hours.
- * Salon is open 9:00 AM – 9:00 PM.
- * Online joining closes 30 minutes before salon closing (at 8:30 PM / 20:30).
- */
-export function isOnlineJoiningAllowed(): { allowed: boolean; reason?: string } {
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('en-GB', {
-    timeZone: SALON_TIMEZONE,
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+export function englishClock(value: string) {
+  const hour = Number(value.slice(0, 2));
+  return `${hour % 12 || 12}:${value.slice(3)} ${hour < 12 ? 'AM' : 'PM'}`;
+}
 
-  if (timeStr < '09:00') {
-    return {
-      allowed: false,
-      reason: 'Online joining is closed. Salon opens at 9:00 AM.'
-    };
-  }
+export function getSalonOperatingStatus(now = new Date()) {
+  const settings = getSalonSettings();
+  const time = now.toLocaleTimeString('en-GB', { timeZone: SALON_TIMEZONE, hourCycle: 'h23' });
+  const minute = timeInMinutes(time.slice(0, 5));
+  const elapsedMs = minute * 60_000 + Number(time.slice(6, 8)) * 1000 + now.getMilliseconds();
+  const opens = timeInMinutes(settings.openTime);
+  const closes = timeInMinutes(settings.closeTime);
+  const cutoff = closes - ONLINE_CUTOFF_MINUTES;
+  const cutoffTime = clockLabel(cutoff);
+  const salonOpen = minute >= opens && minute < closes;
+  const reasonCode: 'beforeOpening' | 'afterClosing' | 'onlineDisabled' | 'onlineCutoff' | null = minute < opens ? 'beforeOpening'
+    : minute >= closes ? 'afterClosing'
+    : !settings.onlineJoiningEnabled ? 'onlineDisabled'
+    : minute >= cutoff ? 'onlineCutoff'
+    : null;
+  const nextBoundary = [opens, cutoff, closes, 1440].find((value) => value > minute) ?? 1440;
+  return {
+    ...settings,
+    salonOpen,
+    cutoffTime,
+    isOnlineJoiningOpen: reasonCode === null,
+    reasonCode,
+    refreshAfterMs: nextBoundary * 60_000 - elapsedMs,
+  };
+}
 
-  if (timeStr >= '20:30') {
-    return {
-      allowed: false,
-      reason: 'Online joining is closed for today (closes at 8:30 PM, 30 minutes before salon closes).'
-    };
-  }
+export function isSalonOpen(now = new Date()): { open: boolean; reason?: string } {
+  const status = getSalonOperatingStatus(now);
+  return { open: status.salonOpen, reason: getPhysicalClosureReason(status) };
+}
 
-  return { allowed: true };
+export function getPhysicalClosureReason(status: ReturnType<typeof getSalonOperatingStatus>) {
+  if (status.salonOpen) return;
+  return status.reasonCode === 'beforeOpening'
+    ? `Salon is closed. Opens at ${englishClock(status.openTime)}.`
+    : `Salon is closed for the day (Closed at ${englishClock(status.closeTime)}).`;
+}
+
+export function isOnlineJoiningAllowed(now = new Date()) {
+  const status = getSalonOperatingStatus(now);
+  return {
+    allowed: status.isOnlineJoiningOpen,
+    reason: getOnlineClosureReason(status),
+    reasonCode: status.reasonCode,
+  };
+}
+
+export function getOnlineClosureReason(status: ReturnType<typeof getSalonOperatingStatus>) {
+  if (!status.reasonCode) return;
+  const reasons = {
+    beforeOpening: `Online joining is closed. Salon opens at ${englishClock(status.openTime)}.`,
+    afterClosing: `Online joining is closed. Salon closed at ${englishClock(status.closeTime)}.`,
+    onlineDisabled: 'Online joining is disabled by the salon.',
+    onlineCutoff: `Online joining is closed for today (closes at ${englishClock(status.cutoffTime)}, 30 minutes before salon closes).`,
+  };
+  return reasons[status.reasonCode];
 }

@@ -1,15 +1,14 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from '../i18n/LanguageContext';
-import { SALON_SERVICES, SALON_BARBERS } from '../data/salonData';
-import { JoinQueueFormState, JoinQueueValidationErrors, SalonService } from '../types/salon';
+import { useSalonCatalog } from '../utils/useSalonCatalog';
+import { JoinQueueFormState, JoinQueueValidationErrors } from '../types/salon';
 import {
   ArrowLeft,
   User,
   Check,
   AlertCircle,
   Clock,
-  Sparkles,
   Scissors,
   CheckCircle2,
   Search,
@@ -17,7 +16,12 @@ import {
 } from 'lucide-react';
 
 export const JoinPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const { catalog, failed, retry } = useSalonCatalog();
+  const status = catalog?.status;
+  const barbers = catalog?.barbers;
+  const services = catalog?.services;
+  const onlineOpen = Boolean(status?.isOnlineJoiningOpen && !failed);
   const navigate = useNavigate();
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -34,40 +38,47 @@ export const JoinPage: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [maxWarning, setMaxWarning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [catalogNotice, setCatalogNotice] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Filtered services based on search query and category
   const filteredServices = useMemo(() => {
-    return SALON_SERVICES.filter((service) => {
+    return (services ?? []).filter((service) => {
       const matchesCategory =
         activeCategory === 'all' || service.category === activeCategory;
-      const localizedName = t(service.nameKey).toLowerCase();
-      const defaultName = service.defaultName.toLowerCase();
+      const englishName = service.name_en.toLowerCase();
+      const gujaratiName = service.name_gu.toLowerCase();
       const q = searchQuery.toLowerCase();
-      const matchesSearch = localizedName.includes(q) || defaultName.includes(q);
+      const matchesSearch = englishName.includes(q) || gujaratiName.includes(q);
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, searchQuery, t]);
+  }, [activeCategory, searchQuery, services]);
 
   // Selected services list and dynamic totals
   const selectedServices = useMemo(() => {
-    return SALON_SERVICES.filter((s) => formState.selectedServiceIds.includes(s.id));
-  }, [formState.selectedServiceIds]);
+    return (services ?? []).filter((s) => formState.selectedServiceIds.includes(s.id));
+  }, [formState.selectedServiceIds, services]);
+
+  useEffect(() => {
+    if (!services || selectedServices.length === formState.selectedServiceIds.length) return;
+    setFormState((previous) => ({
+      ...previous,
+      selectedServiceIds: previous.selectedServiceIds.filter((id) => services.some((service) => service.id === id)),
+    }));
+    setCatalogNotice(true);
+  }, [services, selectedServices.length, formState.selectedServiceIds.length]);
 
   const totalDuration = useMemo(() => {
-    return selectedServices.reduce((acc, s) => acc + s.durationMinutes, 0);
+    return selectedServices.reduce((acc, s) => acc + s.duration_minutes, 0);
   }, [selectedServices]);
 
   const totalPrice = useMemo(() => {
     return selectedServices.reduce((acc, s) => acc + s.price, 0);
   }, [selectedServices]);
 
-  // Preview wait time approximation based on services & barber
-  const estimatedWaitPreview = useMemo(() => {
-    const baseWait = 10;
-    const additional = selectedServices.reduce((acc, s) => acc + Math.round(s.durationMinutes / 3), 0);
-    return Math.max(10, baseWait + additional);
-  }, [selectedServices]);
+  const estimatedWaitPreview = formState.barberPreference === 'any'
+    ? status?.approxWaitMinutes
+    : status?.barberWaitMinutes[formState.barberPreference];
 
   // Helper to sanitize phone input (handles country codes +91, 0, or spaces)
   const handlePhoneChange = (inputVal: string) => {
@@ -86,6 +97,7 @@ export const JoinPage: React.FC = () => {
 
   // Service toggle handler with strict 3-service max limit
   const toggleService = (serviceId: string) => {
+    setCatalogNotice(false);
     const isSelected = formState.selectedServiceIds.includes(serviceId);
     if (isSelected) {
       setFormState((prev) => ({
@@ -131,12 +143,15 @@ export const JoinPage: React.FC = () => {
       newErrors.phoneNumber = t('join.errors.phoneInvalid');
     }
 
-    if (formState.selectedServiceIds.length === 0) {
+    if (selectedServices.length === 0) {
       newErrors.services = t('join.errors.serviceRequired');
     } else if (formState.selectedServiceIds.length > 3) {
       newErrors.services = t('join.errors.maxServices');
     }
 
+    if (formState.barberPreference !== 'any' && !barbers?.some(({ id }) => id === formState.barberPreference)) {
+      newErrors.barberPreference = t('settings.barberUnavailable');
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -146,7 +161,7 @@ export const JoinPage: React.FC = () => {
     e.preventDefault();
     setSubmitError(null);
 
-    if (!validateForm()) {
+    if (!onlineOpen || selectedServices.length !== formState.selectedServiceIds.length || !validateForm()) {
       if (formRef.current) {
         formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
@@ -164,7 +179,7 @@ export const JoinPage: React.FC = () => {
         body: JSON.stringify({
           customerName: formState.customerName.trim(),
           phoneNumber: formState.phoneNumber.trim(),
-          serviceIds: formState.selectedServiceIds,
+          serviceIds: selectedServices.map(({ id }) => id),
           barberPreference: formState.barberPreference
         })
       });
@@ -172,7 +187,8 @@ export const JoinPage: React.FC = () => {
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || t('join.errors.joinFailed'));
+        retry();
+        throw new Error(data.reasonCode ? t(`settings.${data.reasonCode}`) : data.error || t('join.errors.joinFailed'));
       }
 
       const ticket = data.ticket;
@@ -206,12 +222,13 @@ export const JoinPage: React.FC = () => {
     setFormState({
       customerName: '',
       phoneNumber: '',
-      selectedServiceIds: ['haircut'],
+      selectedServiceIds: services?.some(({ id }) => id === 'haircut') ? ['haircut'] : [],
       barberPreference: 'any'
     });
     setErrors({});
     setSubmitError(null);
     setMaxWarning(false);
+    setCatalogNotice(false);
   };
 
   return (
@@ -223,13 +240,9 @@ export const JoinPage: React.FC = () => {
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-300 hover:text-[#D4A017] transition-colors min-h-[38px] px-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Home</span>
+          <span>{t('status.backToHome')}</span>
         </Link>
 
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4A017]/15 border border-[#D4A017]/40 text-[#D4A017] text-xs font-semibold shrink-0">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Live Queue</span>
-        </span>
       </div>
 
       {/* Screen Title Header */}
@@ -245,12 +258,18 @@ export const JoinPage: React.FC = () => {
         </div>
       </div>
 
+      {status && <p role="status">{status.openTime}–{status.closeTime} · {t(status.reasonCode ? `settings.${status.reasonCode}` : 'settings.onlineOpen')} · {t('settings.cutoff')} {status.cutoffTime}</p>}
+      {!status && !failed && <p role="status">{t('barber.loading')}</p>}
+      {failed && <button type="button" className="min-h-11 rounded-xl border border-gray-500 px-4" onClick={retry}>{t('settings.retry')}</button>}
+
+      {catalogNotice && <p role="status">{t('settings.reviewServices')}</p>}
+
       {/* Backend Submit Error Alert Banner */}
       {submitError && (
         <div className="p-4 rounded-xl bg-red-500/15 border-2 border-red-500/50 text-red-300 text-xs sm:text-sm flex items-start gap-3 shadow-lg animate-in fade-in">
           <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-bold text-white">Could not join queue</p>
+            <p className="font-bold text-white">{t('join.errors.joinFailed')}</p>
             <p>{submitError}</p>
           </div>
         </div>
@@ -396,7 +415,7 @@ export const JoinPage: React.FC = () => {
 
             {/* Services Grid - 1 col on mobile, 2 cols on tablet/desktop */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 pt-1">
-              {filteredServices.map((service: SalonService) => {
+              {filteredServices.map((service) => {
                 const isSelected = formState.selectedServiceIds.includes(service.id);
                 const isMaxReached = formState.selectedServiceIds.length >= 3;
                 const isDisabled = !isSelected && isMaxReached;
@@ -416,10 +435,7 @@ export const JoinPage: React.FC = () => {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className={`font-bold text-sm ${isSelected ? 'text-[#D4A017]' : 'text-white'} truncate`}>
-                          {t(service.nameKey)}
-                        </p>
-                        <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">
-                          {t(service.descriptionKey)}
+                          {language === 'gu' ? service.name_gu : service.name_en}
                         </p>
                       </div>
 
@@ -437,7 +453,7 @@ export const JoinPage: React.FC = () => {
                     <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#374151]/60 text-xs">
                       <span className="text-gray-400 flex items-center gap-1 text-[11px]">
                         <Clock className="w-3 h-3 text-gray-500 shrink-0" />
-                        {service.durationMinutes} {t('home.minutes')}
+                        {service.duration_minutes} {t('home.minutes')}
                       </span>
                       <span className="font-extrabold text-[#D4A017] text-sm">
                         ₹{service.price}
@@ -495,7 +511,7 @@ export const JoinPage: React.FC = () => {
               </div>
 
               {/* Specific Barbers: Ravi, Amit, Imran */}
-              {SALON_BARBERS.map((barber) => {
+              {(barbers ?? []).map((barber) => {
                 const isSelected = formState.barberPreference === barber.id;
                 return (
                   <div
@@ -514,7 +530,6 @@ export const JoinPage: React.FC = () => {
                         </div>
                         <div>
                           <h3 className="font-bold text-sm text-white">{barber.name}</h3>
-                          <p className="text-[10px] text-gray-400">{t(barber.specializationKey)}</p>
                         </div>
                       </div>
 
@@ -530,10 +545,10 @@ export const JoinPage: React.FC = () => {
                     </div>
 
                     <div className="mt-2 pt-2 border-t border-[#374151]/50 flex items-center justify-between text-[11px]">
-                      <span className="text-gray-400">Status</span>
+                      <span className="text-gray-400">{t('settings.status')}</span>
                       <span className="text-emerald-400 font-semibold flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                        {t(`home.status.${barber.status}`)}
+                        {t(`barber.state_${barber.status}`)}
                       </span>
                     </div>
                   </div>
@@ -541,6 +556,7 @@ export const JoinPage: React.FC = () => {
               })}
             </div>
           </div>
+          {errors.barberPreference && <p role="alert">{errors.barberPreference}</p>}
         </div>
 
         {/* Right Column (1 col): Live Sticky Summary Card */}
@@ -571,10 +587,10 @@ export const JoinPage: React.FC = () => {
                     >
                       <div className="min-w-0 flex-1 pr-2">
                         <p className="font-semibold text-white truncate text-xs">
-                          {t(service.nameKey)}
+                          {language === 'gu' ? service.name_gu : service.name_en}
                         </p>
                         <p className="text-[10px] text-gray-400">
-                          {service.durationMinutes} {t('home.minutes')}
+                          {service.duration_minutes} {t('home.minutes')}
                         </p>
                       </div>
                       <span className="font-bold text-[#D4A017] shrink-0">
@@ -593,7 +609,7 @@ export const JoinPage: React.FC = () => {
                 <span className="font-semibold text-white">
                   {formState.barberPreference === 'any'
                     ? t('join.anyBarber')
-                    : SALON_BARBERS.find((b) => b.id === formState.barberPreference)?.name}
+                    : barbers?.find((b) => b.id === formState.barberPreference)?.name ?? t('settings.barberUnavailable')}
                 </span>
               </div>
 
@@ -605,10 +621,10 @@ export const JoinPage: React.FC = () => {
               <div className="p-3 rounded-xl bg-[#111827] border border-[#374151] space-y-1">
                 <div className="flex justify-between items-center">
                   <span className="text-[11px] text-gray-400">{t('join.estWait')}:</span>
-                  <span className="font-black text-[#D4A017] text-sm">~{estimatedWaitPreview} mins</span>
+                  <span className="font-black text-[#D4A017] text-sm">{estimatedWaitPreview == null ? t('status.waitUnavailable') : `~${estimatedWaitPreview} ${t('home.minutes')}`}</span>
                 </div>
                 <p className="text-[10px] text-gray-500 leading-tight">
-                  *{t('join.demoWaitNote')}
+                  *{t('status.waitNote')}
                 </p>
               </div>
 
@@ -622,9 +638,9 @@ export const JoinPage: React.FC = () => {
             <div className="space-y-2 pt-2">
               <button
                 type="submit"
-                disabled={isSubmitting || selectedServices.length === 0}
+                disabled={isSubmitting || selectedServices.length === 0 || !onlineOpen}
                 className={`w-full min-h-[48px] py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#D4A017] to-[#B8860B] text-[#111827] font-black text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
-                  isSubmitting || selectedServices.length === 0
+                  isSubmitting || selectedServices.length === 0 || !onlineOpen
                     ? 'opacity-60 cursor-not-allowed'
                     : 'hover:brightness-110 active:scale-[0.99] cursor-pointer'
                 }`}

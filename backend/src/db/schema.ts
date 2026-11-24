@@ -149,15 +149,13 @@ export function initializeDatabaseSchema() {
   }
 
   // Seed salon settings
-  const settingCheck = db.prepare('SELECT count(*) as count FROM salon_settings').get() as { count: number };
-  if (settingCheck.count === 0) {
-    db.prepare(`
-      INSERT INTO salon_settings (key, value) VALUES
-      ('is_open', '1'),
-      ('open_time', '09:00'),
-      ('close_time', '21:00')
-    `).run();
-  }
+  db.prepare(`
+    INSERT OR IGNORE INTO salon_settings (key, value) VALUES
+    ('is_open', '1'),
+    ('open_time', '09:00'),
+    ('close_time', '21:00'),
+    ('online_joining_enabled', '1')
+  `).run();
 
   // Close uncompleted leftover tickets from previous calendar days as 'no_show' without deleting records
   const today = getLocalTodayDate();

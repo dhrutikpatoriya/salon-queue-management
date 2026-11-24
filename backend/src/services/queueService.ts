@@ -58,6 +58,7 @@ export function joinCustomerQueue(input: JoinQueueInput): {
   if (!hoursCheck.allowed) {
     const error: any = new Error(hoursCheck.reason || 'Online joining is currently closed');
     error.statusCode = 403;
+    error.reasonCode = hoursCheck.reasonCode;
     throw error;
   }
 
@@ -107,7 +108,7 @@ export function joinCustomerQueue(input: JoinQueueInput): {
   const barberPref = (input.barberPreference || 'any').toLowerCase().trim();
   if (barberPref !== 'any') {
     const barber = db.prepare(
-      `SELECT * FROM barbers WHERE id = ? AND is_on_duty = 1`
+      `SELECT * FROM barbers WHERE id = ? AND is_on_duty = 1 AND status != 'off_duty'`
     ).get(barberPref) as BarberRecord | undefined;
     if (!barber) {
       const error: any = new Error('Selected barber is not on duty or invalid');
@@ -134,7 +135,7 @@ export function joinCustomerQueue(input: JoinQueueInput): {
 
     if (existingTicket) {
       const ticketServices = db.prepare(`
-        SELECT s.* FROM services s
+        SELECT s.id, s.name_en, s.name_gu, s.category, qs.duration_minutes, qs.price FROM services s
         JOIN queue_services qs ON s.id = qs.service_id
         WHERE qs.queue_id = ?
       `).all(existingTicket.id) as ServiceRecord[];
@@ -206,11 +207,12 @@ export function joinCustomerQueue(input: JoinQueueInput): {
 /**
  * Calculates FCFS queue position and approximate waiting time according to docs/03-flows-rules.md.
  */
-export function calculateQueuePositionAndTime(ticket: Pick<QueueEntryRow, 'status' | 'created_date' | 'created_at' | 'barber_preference'>): {
+export function calculateQueuePositionAndTime(ticket: Pick<QueueEntryRow, 'status' | 'created_date' | 'created_at' | 'barber_preference'> & { token_number?: number }): {
   position: number;
   approxWaitMinutes: number | null;
   isWaitUnavailable: boolean;
   waitReason?: string;
+  waitReasonCode?: 'noneWorking' | 'preferredOffDuty' | 'preferredOnBreak';
   eligibleCustomersAhead: number;
   workingBarbersCount: number;
 } {
@@ -230,9 +232,9 @@ export function calculateQueuePositionAndTime(ticket: Pick<QueueEntryRow, 'statu
   const allWaitingAhead = db.prepare(`
     SELECT id, barber_preference, total_duration_minutes, created_at
     FROM queue_entries
-    WHERE created_date = ? AND status = 'waiting' AND created_at < ?
+    WHERE created_date = ? AND status = 'waiting' AND (created_at < ? OR (created_at = ? AND token_number < ?))
     ORDER BY created_at ASC, token_number ASC
-  `).all(todayDate, ticket.created_at) as Array<{
+  `).all(todayDate, ticket.created_at, ticket.created_at, ticket.token_number ?? 0) as Array<{
     id: string;
     barber_preference: string;
     total_duration_minutes: number;
@@ -246,6 +248,7 @@ export function calculateQueuePositionAndTime(ticket: Pick<QueueEntryRow, 'statu
 
   let eligibleAhead: typeof allWaitingAhead = [];
   let workingBarbersCount = 0;
+  let waitReasonCode: 'noneWorking' | 'preferredOffDuty' | 'preferredOnBreak' = 'noneWorking';
 
   if (ticket.barber_preference === 'any') {
     // For Any Barber: all waiting customers ahead count
@@ -263,6 +266,7 @@ export function calculateQueuePositionAndTime(ticket: Pick<QueueEntryRow, 'statu
 
     // Working barbers count for this specific queue is 1 if that barber is available or busy, 0 if on break/off-duty
     const specificBarber = onDutyBarbers.find((b) => b.id === pref);
+    waitReasonCode = specificBarber?.status === 'break' ? 'preferredOnBreak' : 'preferredOffDuty';
     if (specificBarber && (specificBarber.status === 'available' || specificBarber.status === 'busy')) {
       workingBarbersCount = 1;
     } else {
@@ -279,9 +283,12 @@ export function calculateQueuePositionAndTime(ticket: Pick<QueueEntryRow, 'statu
       position,
       approxWaitMinutes: null,
       isWaitUnavailable: true,
-      waitReason: ticket.barber_preference === 'any'
-        ? 'All barbers are currently on break'
-        : 'Your selected barber is currently on break',
+      waitReasonCode,
+      waitReason: {
+        noneWorking: 'No barbers are currently working',
+        preferredOffDuty: 'Your selected barber is off duty',
+        preferredOnBreak: 'Your selected barber is on break',
+      }[waitReasonCode],
       eligibleCustomersAhead: eligibleAhead.length,
       workingBarbersCount: 0
     };
@@ -318,7 +325,7 @@ export function getQueueTicket(ticketId: string, accessToken?: string) {
   }
 
   const services = db.prepare(`
-    SELECT s.id, s.name_en, s.name_gu, s.duration_minutes, s.price, s.category
+    SELECT s.id, s.name_en, s.name_gu, qs.duration_minutes, qs.price, s.category
     FROM services s
     JOIN queue_services qs ON s.id = qs.service_id
     WHERE qs.queue_id = ?
@@ -347,6 +354,7 @@ export function getQueueTicket(ticketId: string, accessToken?: string) {
     approxWaitMinutes: calculations.approxWaitMinutes,
     isWaitUnavailable: calculations.isWaitUnavailable,
     waitReason: calculations.waitReason,
+    waitReasonCode: calculations.waitReasonCode,
     shouldStartComing: calculations.position === 2,
     isYourTurn: ticket.status === 'called',
     createdAt: ticket.created_at,
