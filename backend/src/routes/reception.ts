@@ -16,24 +16,27 @@ import { broadcastQueueUpdate } from '../socket/socketHandler.js';
 export const receptionRouter = Router();
 
 // POST /api/reception/login - Rate-limited, server-verified staff PIN login
-receptionRouter.post('/login', (req: Request, res: Response) => {
-  const { pin } = req.body;
-  const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+receptionRouter.post('/login', async (req: Request, res: Response, next) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const pin = req.body?.pin;
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
 
-  const result = verifyPinAndCreateSession(pin, ip);
-  if (!result.success) {
-    return res.status(result.status).json({
-      success: false,
-      error: result.error
+    const result = await verifyPinAndCreateSession(pin, ip);
+    if (!result.success) {
+      return res.status(result.status).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Staff authentication successful',
+      token: result.token,
+      expiresAt: result.expiresAt
     });
-  }
-
-  return res.status(200).json({
-    success: true,
-    message: 'Staff authentication successful',
-    token: result.token,
-    expiresAt: result.expiresAt
-  });
+  } catch (error) { next(error); }
 });
 
 // POST /api/reception/logout - Revokes staff session token
@@ -55,7 +58,7 @@ receptionRouter.post('/logout', requireStaffAuth, (req: Request, res: Response) 
 
 // GET /api/reception/session - Verifies active session token
 receptionRouter.get('/session', requireStaffAuth, (req: Request, res: Response) => {
-  const session = (req as any).staffSession;
+  const session = res.locals.staffSession;
   return res.status(200).json({
     success: true,
     valid: true,

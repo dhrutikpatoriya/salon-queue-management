@@ -51,9 +51,12 @@ async function walkIn(page: Page, name: string, phone: string, barber?: string) 
   return result;
 }
 
+function receptionCard(page: Page, barber: string) {
+  return page.getByText(barber, { exact: true }).locator('../../..');
+}
+
 function callNext(page: Page, barber: string) {
-  const card = page.getByText(barber, { exact: true }).locator('../../..');
-  return card.getByRole('button', { name: en.reception.callNextBtn, exact: true });
+  return receptionCard(page, barber).getByRole('button', { name: en.reception.callNextBtn, exact: true });
 }
 
 async function fitsScreen(page: Page) {
@@ -93,6 +96,17 @@ test('reception, customer, barber and TV stay synchronized through a service and
   await reception.getByRole('button', { name: en.reception.pinSubmit }).click();
   const first = await walkIn(reception, 'Fixture Walk-in One', '9000000001', 'Ravi');
   expect(first.tokenDisplay).toBe('S-1');
+  await expect(callNext(reception, 'Ravi')).toBeEnabled();
+  // Capture the empty-eligibility state and assert it after the full transition walkthrough.
+  const inappropriateCalls = await Promise.all(['Amit', 'Imran'].map((id) => callNext(reception, id).isEnabled()));
+  const amitCard = receptionCard(reception, 'Amit');
+  const emptyAmitMessage = await amitCard.getByText(en.reception.noEligible.replace('{barber}', 'Amit')).isVisible();
+  const ownerLogin = await reception.request.post('/api/admin/login', { data: { password: process.env.SALON_E2E_OWNER } });
+  expect(ownerLogin.ok()).toBe(true);
+  const ownerToken = (await ownerLogin.json()).token;
+  const amitDuty = (onDuty: boolean) => reception.request.patch('/api/admin/barbers/amit/duty', {
+    headers: { Authorization: `Bearer ${ownerToken}` }, data: { onDuty },
+  });
 
   // A real online join supplies the private customer status credential through normal UI.
   await customer.goto('/join');
@@ -119,7 +133,44 @@ test('reception, customer, barber and TV stay synchronized through a service and
   await expect(waiting).toHaveText(['S-1', 'S-2', 'S-3', 'S-4', 'S-5']);
   await expect.poll(() => connections.size).toBeGreaterThan(0);
 
-  await callNext(reception, 'Amit').click();
+  // Hold a pre-call dashboard snapshot until the post-call refresh has rendered.
+  let dashboardReads = 0;
+  let staleSnapshotReady!: () => void;
+  let releaseStale!: () => void;
+  let releaseFollowup!: () => void;
+  const snapshotReady = new Promise<void>((resolve) => { staleSnapshotReady = resolve; });
+  const staleGate = new Promise<void>((resolve) => { releaseStale = resolve; });
+  const followupGate = new Promise<void>((resolve) => { releaseFollowup = resolve; });
+  const dashboardPattern = '**/api/reception/dashboard';
+  await reception.route(dashboardPattern, async (route) => {
+    const sequence = ++dashboardReads;
+    if (sequence === 1) {
+      const response = await route.fetch();
+      staleSnapshotReady();
+      await staleGate;
+      await route.fulfill({ response });
+      return;
+    }
+    if (sequence > 2) await followupGate;
+    await route.continue();
+  });
+
+  expect((await amitDuty(true)).status()).toBe(204);
+  await snapshotReady;
+  try {
+    await callNext(reception, 'Amit').click();
+    await expect(callNext(reception, 'Amit')).toBeDisabled();
+    await expect(amitCard.getByText(en.reception.busyCalling, { exact: true })).toBeVisible();
+    const staleDelivered = reception.waitForResponse((response) => response.url().endsWith('/api/reception/dashboard'));
+    releaseStale();
+    await staleDelivered;
+    await reception.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(await callNext(reception, 'Amit').isDisabled(), 'A delayed Available snapshot must not re-enable Call Next').toBe(true);
+  } finally {
+    releaseStale();
+    releaseFollowup();
+    await reception.unrouteAll({ behavior: 'wait' });
+  }
   await Promise.all([
     expect(customer.getByText(en.status.statusCalled, { exact: true })).toBeVisible(liveTimeout),
     expect(amit.getByText('S-2', { exact: true })).toBeVisible(liveTimeout),
@@ -127,6 +178,10 @@ test('reception, customer, barber and TV stay synchronized through a service and
     expect(barber.getByRole('button', { name: en.barber.startService })).toBeVisible(liveTimeout),
   ]);
   await expect(waiting).toHaveText(['S-1', 'S-3', 'S-4', 'S-5', 'S-6']);
+  await expect(amitCard.getByText(en.reception.busyCalling, { exact: true })).toBeVisible();
+  await expect(amitCard.getByText('S-2', { exact: true })).toBeVisible();
+  await expect(callNext(reception, 'Amit')).toBeDisabled();
+  await expect(callNext(reception, 'Imran')).toBeEnabled();
   await expect(tv.locator('body')).not.toContainText(/Fixture|900000000[1-7]|Classic Haircut/);
   const publicData = await (await tv.request.get('/api/display')).text();
   expect(privateValues.every((value) => !publicData.includes(value)), 'TV API omits private fixture information').toBe(true);
@@ -148,6 +203,8 @@ test('reception, customer, barber and TV stay synchronized through a service and
     expect(barber.getByRole('button', { name: en.barber.doneService })).toBeVisible(liveTimeout),
   ]);
   await expect(barber.getByRole('button', { name: en.barber.startBreak })).toHaveCount(0);
+  await expect(amitCard.getByText(en.reception.busyInChair, { exact: true })).toBeVisible();
+  await expect(callNext(reception, 'Amit')).toBeDisabled();
   await fitsScreen(barber);
   await barber.screenshot({ path: testInfo.outputPath('barber-in-chair-390x844.png') });
   const done = barber.getByRole('button', { name: en.barber.doneService });
@@ -164,6 +221,26 @@ test('reception, customer, barber and TV stay synchronized through a service and
   await expect(callNext(reception, 'Amit')).toBeDisabled();
   await barber.getByRole('button', { name: en.barber.endBreak }).click();
   await expect(callNext(reception, 'Amit')).toBeEnabled(liveTimeout);
+  expect((await amitDuty(false)).status()).toBe(204);
+  await expect(amitCard.getByText(en.reception.offDuty, { exact: true })).toBeVisible();
+  await expect(callNext(reception, 'Amit')).toBeDisabled();
+  const disconnectedReception = await context.newPage();
+  await disconnectedReception.clock.install({ time: clock });
+  await disconnectedReception.routeWebSocket(/\/socket\.io\//, (socket) => socket.close());
+  await disconnectedReception.route('**/socket.io/**', (route) => route.abort());
+  try {
+    await disconnectedReception.goto('/reception');
+    await enterSecret(disconnectedReception.getByPlaceholder(en.reception.pinPlaceholder), process.env.SALON_E2E_STAFF);
+    await disconnectedReception.getByRole('button', { name: en.reception.pinSubmit }).click();
+    await expect(receptionCard(disconnectedReception, 'Amit').getByText(en.reception.offDuty, { exact: true })).toBeVisible();
+    expect((await amitDuty(true)).status()).toBe(204);
+    await expect(callNext(reception, 'Amit')).toBeEnabled();
+    await expect(callNext(disconnectedReception, 'Amit')).toBeDisabled();
+    await disconnectedReception.clock.fastForward(31_000);
+    await expect(callNext(disconnectedReception, 'Amit')).toBeEnabled();
+  } finally {
+    await disconnectedReception.close();
+  }
 
   socketBlocked = true;
   await Promise.all([...connections].flatMap(([socket, upstream]) => [socket.close(), upstream.close()]));
@@ -179,6 +256,8 @@ test('reception, customer, barber and TV stay synchronized through a service and
   await expect(waiting).toHaveText(['S-3', 'S-4', 'S-5', 'S-6', 'S-7']);
   await fitsScreen(tv);
   await tv.screenshot({ path: testInfo.outputPath('tv-recovered-1920x1080.png') });
+  expect(inappropriateCalls, 'Amit and Imran must have no active Call action when all waiting tickets prefer Ravi').toEqual([false, false]);
+  expect(emptyAmitMessage, 'Reception must explain why Amit cannot call').toBe(true);
 });
 
 test('barber and TV render English and Gujarati with usable controls and no horizontal overflow', async ({ page: barber, context }, testInfo) => {

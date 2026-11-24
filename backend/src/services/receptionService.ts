@@ -9,6 +9,7 @@ export interface ReceptionBarberOverview {
   name: string;
   dutyStatus: 'on_duty' | 'off_duty';
   operationalState: 'available' | 'busy' | 'calling' | 'in_chair' | 'break' | 'off_duty';
+  canCallNext: boolean;
   currentTicket: {
     id: string;
     tokenDisplay: string;
@@ -82,6 +83,7 @@ export function getReceptionDashboardData(): ReceptionDashboardData {
         name: b.name,
         dutyStatus: 'off_duty',
         operationalState: 'off_duty',
+        canCallNext: false,
         currentTicket: null
       };
     }
@@ -92,6 +94,7 @@ export function getReceptionDashboardData(): ReceptionDashboardData {
         name: b.name,
         dutyStatus: 'on_duty',
         operationalState: 'break',
+        canCallNext: false,
         currentTicket: null
       };
     }
@@ -119,6 +122,7 @@ export function getReceptionDashboardData(): ReceptionDashboardData {
         name: b.name,
         dutyStatus: 'on_duty',
         operationalState: b.status,
+        canCallNext: b.status === 'available' && Boolean(nextWaitingForBarber(today, b.id)),
         currentTicket: null
       };
     }
@@ -136,6 +140,7 @@ export function getReceptionDashboardData(): ReceptionDashboardData {
       dutyStatus: 'on_duty',
       // Mandatory Correction 3: Strictly distinguish Called from In Chair!
       operationalState: active.status === 'called' ? 'calling' : 'in_chair',
+      canCallNext: false,
       currentTicket: {
         id: active.id,
         tokenDisplay: active.token_display,

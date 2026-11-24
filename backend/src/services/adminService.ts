@@ -1,3 +1,4 @@
+import { isCredentialConfigured } from './credentialService.js';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/database.js';
 import { activeAssignment } from './queueSelection.js';
@@ -24,8 +25,13 @@ export function getOwnerDashboard() {
     date,
     settings: getSalonOperatingStatus(),
     services: db.prepare('SELECT * FROM services ORDER BY name_en, id').all(),
+    receptionistCredentialConfigured: isCredentialConfigured('reception'),
     barbers: (db.prepare('SELECT id, name, status, is_on_duty FROM barbers ORDER BY name, id').all() as BarberRecord[])
-      .map((barber) => ({ ...barber, hasActiveAssignment: Boolean(activeAssignment(barber.id)) })),
+      .map((barber) => ({
+        ...barber,
+        hasActiveAssignment: Boolean(activeAssignment(barber.id)),
+        credentialConfigured: isCredentialConfigured(`barber:${barber.id}`),
+      })),
     stats: { ...counts, averageWaitMinutes: average === null ? null : Math.round(average) },
   };
 }

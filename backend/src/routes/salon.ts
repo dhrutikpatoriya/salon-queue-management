@@ -18,12 +18,15 @@ salonRouter.get('/services', (_req: Request, res: Response) => {
   }
 });
 
-// GET /api/salon/barbers - List on-duty barbers
-salonRouter.get('/barbers', (_req: Request, res: Response) => {
+// Keep the customer roster on duty only. The staff portal can show all public profiles.
+salonRouter.get('/barbers', (req: Request, res: Response) => {
   try {
-    const barbers = db.prepare(
-      `SELECT id, name, status FROM barbers WHERE is_on_duty = 1 AND status != 'off_duty'`
-    ).all();
+    const barbers = req.query.scope === 'portal'
+      ? db.prepare(`
+          SELECT id, name, CASE WHEN is_on_duty = 0 THEN 'off_duty' ELSE status END AS status
+          FROM barbers ORDER BY name, id
+        `).all()
+      : db.prepare("SELECT id, name, status FROM barbers WHERE is_on_duty = 1 AND status != 'off_duty'").all();
     return res.status(200).json({ success: true, barbers });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });

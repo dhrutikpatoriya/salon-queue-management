@@ -1,3 +1,4 @@
+import { initializeCredentialSchema } from './credentialSchema.js';
 import { db } from './database.js';
 import { getLocalTodayDate } from '../utils/timeUtils.js';
 
@@ -5,6 +6,7 @@ export function initializeDatabaseSchema() {
   // 1. Enable WAL mode for high concurrency
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  initializeCredentialSchema();
 
   // 2. Services Table
   db.exec(`

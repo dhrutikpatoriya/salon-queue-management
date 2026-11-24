@@ -74,6 +74,7 @@ export interface ReceptionBarberOverview {
   name: string;
   dutyStatus: 'on_duty' | 'off_duty';
   operationalState: 'available' | 'busy' | 'calling' | 'in_chair' | 'break' | 'off_duty';
+  canCallNext: boolean;
   currentTicket: {
     id: string;
     tokenDisplay: string;
@@ -192,6 +193,7 @@ export interface OwnerDashboard {
   date: string;
   settings: OperatingStatus;
   services: Array<CatalogService & { is_active: 0 | 1 }>;
-  barbers: Array<CatalogBarber & { is_on_duty: 0 | 1; hasActiveAssignment: boolean }>;
+  receptionistCredentialConfigured: boolean;
+  barbers: Array<CatalogBarber & { is_on_duty: 0 | 1; hasActiveAssignment: boolean; credentialConfigured: boolean }>;
   stats: Record<QueueStatus, number> & { averageWaitMinutes: number | null };
 }

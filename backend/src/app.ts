@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 dotenv.config({ path: '../.env' });
 
-import express from 'express';
+import express, { type ErrorRequestHandler } from 'express';
 import cors from 'cors';
 import { adminRouter } from './routes/admin.js';
 import { healthRouter } from './routes/health.js';
@@ -17,6 +17,11 @@ import { initializeDatabaseSchema } from './db/schema.js';
 export const app = express();
 
 app.use(cors());
+const sensitivePath = /^\/api\/(?:admin|barber|reception)(?:\/|$)/i;
+app.use((req, res, next) => {
+  if (sensitivePath.test(req.path)) res.set('Cache-Control', 'no-store');
+  next();
+});
 app.use(express.json());
 
 // Initialize SQLite schema and seed defaults on startup
@@ -42,3 +47,15 @@ app.use('/api/barbers', (req, res) => {
 // Mount dev test router with internal strict isDevTestEnabled() guard
 // Completely unavailable in production or when dev environment is missing
 app.use('/api/dev', devTestRouter);
+
+
+// Malformed bodies can contain passwords. Keep body-parser errors out of responses and logs.
+const protectAuthenticationErrors: ErrorRequestHandler = (error, req, res, next) => {
+  if (!sensitivePath.test(req.path) || res.headersSent) {
+    next(error);
+    return;
+  }
+  const status = error.status === 400 || error.status === 413 ? error.status : 500;
+  res.status(status).json({ error: status === 500 ? 'requestFailed' : 'invalidRequest' });
+};
+app.use(protectAuthenticationErrors);

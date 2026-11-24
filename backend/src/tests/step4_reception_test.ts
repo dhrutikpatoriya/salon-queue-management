@@ -176,6 +176,24 @@ test('Step 4 Reception Dashboard', async (t) => {
     });
   }
 
+  await t.test('concurrent calls for Amit claim exactly one eligible ticket', async () => {
+    const assigned = db.prepare("SELECT id FROM queue_entries WHERE assigned_barber_id = 'amit' AND status = 'called'").pluck().get() as string;
+    assert.equal((await staffPost(`/no-show/${assigned}`)).status, 200);
+    const before = (await request('/reception/dashboard', undefined, token)).body.data.barbers
+      .find((barber: { id: string }) => barber.id === 'amit');
+    assert.equal(before.canCallNext, true);
+    const expected = db.prepare("SELECT id FROM queue_entries WHERE status = 'waiting' AND barber_preference IN ('amit','any') ORDER BY token_number LIMIT 1").pluck().get();
+    const outcomes = await Promise.all([
+      staffPost('/call-next', { barberId: 'amit' }),
+      staffPost('/call-next', { barberId: 'amit' }),
+    ]);
+    assert.deepEqual(outcomes.map(({ status }) => status).sort(), [200, 400]);
+    assert.equal(outcomes.find(({ status }) => status === 200)?.body.ticket.id, expected);
+    const after = (await request('/reception/dashboard', undefined, token)).body.data.barbers
+      .find((barber: { id: string }) => barber.id === 'amit');
+    assert.equal(after.canCallNext, false);
+  });
+
   await t.test('expired staff session cannot call a ticket', async () => {
     t.mock.timers.tick(4 * 60 * 60 * 1000);
     const response = await staffPost('/call-next', { barberId: 'ravi' });

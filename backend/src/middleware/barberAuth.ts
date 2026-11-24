@@ -1,30 +1,13 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import type { RequestHandler } from 'express';
 import { db } from '../db/database.js';
+import { credentialVersion, verifyAccount } from '../services/credentialService.js';
+import { createAuthLimiter } from '../utils/authLimiter.js';
 import type { BarberRecord } from '../services/queueService.js';
 
 const SESSION_MS = 4 * 60 * 60 * 1000;
-const WINDOW_MS = 15 * 60 * 1000;
-const sessions = new Map<string, { barberId: string; expiresAt: number }>();
-const attempts = new Map<string, { count: number; expiresAt: number }>();
-
-function digest(value: string) {
-  return createHash('sha256').update(value).digest();
-}
-
-function credentialFor(id: string): string | undefined {
-  try {
-    const credentials: unknown = JSON.parse(process.env.BARBER_CREDENTIALS || '{}');
-    if (!credentials || typeof credentials !== 'object' || Array.isArray(credentials)) return;
-    const map = credentials as Record<string, unknown>;
-    const credential = Object.hasOwn(map, id) ? map[id] : undefined;
-    if (typeof credential !== 'string' || credential.length < 4 || credential.length > 128) return;
-    if (Object.values(map).filter((value) => value === credential).length !== 1) return;
-    return credential;
-  } catch {
-    return;
-  }
-}
+const sessions = new Map<string, { barberId: string; expiresAt: number; version: string }>();
+const attempts = createAuthLimiter();
 
 export const resolveBarber: RequestHandler = (req, res, next) => {
   const barber = db.prepare('SELECT * FROM barbers WHERE id = ? COLLATE NOCASE')
@@ -37,47 +20,44 @@ export const resolveBarber: RequestHandler = (req, res, next) => {
   next();
 };
 
-export const loginBarber: RequestHandler = (req, res) => {
-  const barberId: string = res.locals.barberId;
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
-  const now = Date.now();
-  for (const [key, attempt] of attempts) {
-    if (attempt.expiresAt <= now) attempts.delete(key);
-  }
-  const attempt = attempts.get(ip) ?? { count: 0, expiresAt: now + WINDOW_MS };
-  if (attempt.count >= 5) {
-    res.status(429).json({ error: 'rateLimited' });
-    return;
-  }
-
-  const configured = credentialFor(barberId);
-  if (!configured) {
-    res.status(503).json({ error: 'credentialUnavailable' });
-    return;
-  }
-
-  const credential = req.body?.credential;
-  if (typeof credential !== 'string' || credential.length > 128 ||
-      !timingSafeEqual(digest(credential), digest(configured))) {
-    attempt.count++;
-    attempts.set(ip, attempt);
-    res.status(401).json({ error: 'invalidCredential' });
-    return;
-  }
-
-  for (const [key, session] of sessions) {
-    if (session.expiresAt <= now) sessions.delete(key);
-  }
-  const token = randomBytes(32).toString('hex');
-  const expiresAt = now + SESSION_MS;
-  sessions.set(token, { barberId, expiresAt });
-  res.set('Cache-Control', 'no-store').json({ token, expiresAt });
+export const loginBarber: RequestHandler = async (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const barberId: string = res.locals.barberId;
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!attempts.take(ip)) {
+      res.status(429).json({ error: 'rateLimited' });
+      return;
+    }
+    const credential = req.body?.credential;
+    const verified = await verifyAccount(`barber:${barberId}`, typeof credential === 'string' && credential.length <= 128 ? credential : undefined);
+    if (verified.status === 'unavailable') {
+      attempts.refund(ip);
+      res.status(503).json({ error: 'credentialUnavailable' });
+      return;
+    }
+    if (verified.status !== 'valid') {
+      res.status(401).json({ error: 'invalidCredential' });
+      return;
+    }
+    attempts.refund(ip);
+    const now = Date.now();
+    for (const [key, session] of sessions) {
+      if (session.expiresAt <= now) sessions.delete(key);
+    }
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = now + SESSION_MS;
+    sessions.set(token, { barberId, expiresAt, version: verified.version });
+    res.json({ token, expiresAt });
+  } catch (error) { next(error); }
 };
 
 export const requireBarber: RequestHandler = (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
   const token = req.get('Authorization')?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
   const session = token ? sessions.get(token) : undefined;
-  if (!token || !session || session.expiresAt <= Date.now() || !credentialFor(session.barberId)) {
+  if (!token || !session || session.expiresAt <= Date.now() ||
+      session.version !== credentialVersion(`barber:${session.barberId}`)) {
     if (token) sessions.delete(token);
     res.status(401).json({ error: 'sessionExpired' });
     return;
@@ -87,7 +67,6 @@ export const requireBarber: RequestHandler = (req, res, next) => {
     return;
   }
   res.locals.barberToken = token;
-  res.set('Cache-Control', 'no-store');
   next();
 };
 

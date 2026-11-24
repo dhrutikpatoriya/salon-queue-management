@@ -89,16 +89,17 @@ function barberStateColor(state: string): string {
 function BarberCard({
   barber,
   onCallNext,
-  callingId,
+  isCalling,
+  refreshFailed,
   t,
 }: {
   barber: ReceptionBarberOverview;
   onCallNext: (barberId: string) => void;
-  callingId: string | null;
+  isCalling: boolean;
+  refreshFailed: boolean;
   t: (key: string, vars?: Record<string, string>) => string;
 }) {
-  const canCall = barber.dutyStatus === 'on_duty' && barber.operationalState === 'available';
-  const isCalling = callingId === barber.id;
+  const canCall = barber.canCallNext && !refreshFailed;
 
   return (
     <div className="bg-[#111827] border border-[#374151] rounded-2xl p-4 flex flex-col gap-3">
@@ -130,7 +131,11 @@ function BarberCard({
           <p className="text-gray-500 truncate">{barber.currentTicket.customerName}</p>
         </div>
       ) : (
-        <p className="text-xs text-gray-500 italic">{t('reception.emptyQueue')}</p>
+        <p className="text-xs text-gray-400 italic">
+          {barber.operationalState === 'available' && !barber.canCallNext
+            ? t('reception.noEligible').replace('{barber}', barber.name)
+            : t('barber.noAssignment')}
+        </p>
       )}
 
       {/* Call Next button */}
@@ -576,7 +581,9 @@ export const ReceptionPage: React.FC = () => {
   // UI state
   const [filterTab, setFilterTab] = useState<'all' | 'waiting' | 'called' | 'in_chair' | 'history'>('all');
   const [showWalkIn, setShowWalkIn] = useState(false);
-  const [callingBarberId, setCallingBarberId] = useState<string | null>(null);
+  const pendingCalls = useRef(new Set<string>());
+  const [callingBarberIds, setCallingBarberIds] = useState<ReadonlySet<string>>(new Set());
+  const dashboardRequest = useRef(0);
   const [callFeedback, setCallFeedback] = useState<{ barberId: string; msg: string; ok: boolean } | null>(null);
 
   // Modal state
@@ -601,13 +608,15 @@ export const ReceptionPage: React.FC = () => {
 
   // ── Fetch dashboard data ─────────────────────────────────────────────────────
   const fetchDashboard = useCallback(async (token: string, signal?: AbortSignal) => {
+    const requestId = ++dashboardRequest.current;
+    const isCurrent = () => requestId === dashboardRequest.current && !signal?.aborted;
     setLoading(true);
     try {
       const [res, servicesResponse] = await Promise.all([
         fetch(`${API_BASE}/reception/dashboard`, { headers: authHeaders(token), signal }),
         fetch(`${API_BASE}/salon/services`, { signal, cache: 'no-store' }),
       ]);
-      if (signal?.aborted) return;
+      if (!isCurrent()) return;
       if (res.status === 401) { clearToken(); setStaffToken(null); return; }
       const json = await res.json();
       if (!json.success || !servicesResponse.ok) {
@@ -615,15 +624,15 @@ export const ReceptionPage: React.FC = () => {
         return;
       }
       const serviceData = await servicesResponse.json();
-      if (signal?.aborted) return;
+      if (!isCurrent()) return;
       setData(json.data);
       setAvailableServices(serviceData.services);
       setFetchError('');
       return json.data.refreshAfterMs as number;
     } catch {
-      if (!signal?.aborted) setFetchError('settings.loadFailed');
+      if (isCurrent()) setFetchError('settings.loadFailed');
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, []);
 
@@ -631,7 +640,10 @@ export const ReceptionPage: React.FC = () => {
   useEffect(() => {
     if (!staffToken) return;
     const live = subscribeToQueue(getSocket(), (signal) => fetchDashboard(staffToken, signal), () => {});
-    return () => live.stop();
+    return () => {
+      live.stop();
+      dashboardRequest.current++;
+    };
   }, [staffToken, fetchDashboard]);
 
   // ── Grace countdown live timer (re-renders every second when called tickets exist) ──
@@ -693,8 +705,10 @@ export const ReceptionPage: React.FC = () => {
 
   // ── Call Next ─────────────────────────────────────────────────────────────────
   const handleCallNext = async (barberId: string) => {
-    if (!staffToken) return;
-    setCallingBarberId(barberId);
+    const barber = data?.barbers.find((row) => row.id === barberId);
+    if (!staffToken || !barber?.canCallNext || fetchError || pendingCalls.current.has(barberId)) return;
+    pendingCalls.current.add(barberId);
+    setCallingBarberIds(new Set(pendingCalls.current));
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
 
     try {
@@ -704,18 +718,19 @@ export const ReceptionPage: React.FC = () => {
         body: JSON.stringify({ barberId }),
       });
       const json = await res.json();
-      const barberName = data?.barbers.find((b) => b.id === barberId)?.name ?? barberId;
+      const barberName = barber.name;
       if (!res.ok || !json.called) {
         const msg = json.error || json.message || t('reception.noEligible').replace('{barber}', barberName);
         setCallFeedback({ barberId, msg, ok: false });
       } else {
         setCallFeedback({ barberId, msg: json.message ?? 'Called!', ok: true });
-        await fetchDashboard(staffToken);
       }
     } catch {
       setCallFeedback({ barberId, msg: 'Network error', ok: false });
     } finally {
-      setCallingBarberId(null);
+      await fetchDashboard(staffToken);
+      pendingCalls.current.delete(barberId);
+      setCallingBarberIds(new Set(pendingCalls.current));
       feedbackTimerRef.current = setTimeout(() => setCallFeedback(null), 4000);
     }
   };
@@ -895,7 +910,8 @@ export const ReceptionPage: React.FC = () => {
                 key={b.id}
                 barber={b}
                 onCallNext={handleCallNext}
-                callingId={callingBarberId}
+                isCalling={callingBarberIds.has(b.id)}
+                refreshFailed={Boolean(fetchError)}
                 t={t}
               />
             ))}

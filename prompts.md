@@ -516,3 +516,384 @@ This log records every prompt submitted to the AI agent during the development o
 > - Stop and report any security concern or remote divergence instead of pushing.
 >
 > Do not modify or reset the real SQLite database.
+
+---
+
+### Secure Staff Access Before Step 7
+**Date:** 2026-11-24
+**Prompt:**
+> We need to add one final feature to the existing Salon Queue Management System before Step 7 deployment.
+>
+> FEATURE: Secure Staff Access and Credential Management inside the Owner Dashboard (/admin).
+>
+> Steps 1–6 are already implemented, tested and pushed to GitHub. Preserve all existing functionality.
+>
+> First inspect the existing authentication middleware for Reception, Barber and Owner, SQLite schema, session handling, environment variables and Owner Dashboard.
+>
+> IMPLEMENT THE FOLLOWING:
+>
+> 1. Owner Dashboard UI
+>
+> - Add a Staff Access / Security section.
+> - Display the existing receptionist and barber accounts (Ravi, Amit, Imran).
+> - Provide Change PIN/Passcode actions for each account.
+> - Provide a Change Owner Password action.
+> - Never display or retrieve existing passwords or PINs.
+> - Use the charcoal/gold design.
+> - Support English and Gujarati.
+> - Make the UI responsive.
+>
+> 2. Secure credential storage
+>
+> - Use Argon2id with unique salts for storing credential hashes in SQLite.
+> - Never store passwords or PINs in plaintext.
+> - Never use reversible encryption for password storage.
+> - Use a suitable maintained password hashing library compatible with the target Node runtime.
+> - Add a backward-compatible, non-destructive database migration.
+> - Do not change existing queue records or reset the database.
+>
+> 3. Safe bootstrap and migration
+>
+> - Keep current environment-configured credentials working during initial bootstrap.
+> - Provide an explicit, idempotent initialization process for staff, barber and owner credentials.
+> - Avoid silently overwriting credentials that were changed in the Owner Dashboard.
+> - Once a database-backed credential exists, do not permit old environment credentials to authenticate as a fallback.
+> - Fail closed when credentials are missing or improperly configured.
+> - Do not rotate, expose, remove or print current local credentials.
+> - Document how production credentials are initialized before deployment.
+>
+> 4. Owner-authorized credential management
+>
+> - Only the authenticated owner can change staff/barber credentials.
+> - Require recent owner reauthentication before credential changes.
+> - Require the current owner password when changing the owner password.
+> - Enforce strong server-side passcode/password validation and confirmation.
+> - Prevent empty credentials and reuse of known defaults.
+> - Never accept credentials through URL query parameters.
+> - Rate-limit authentication and sensitive credential-change endpoints.
+> - Ensure credentials are excluded from logs, API read responses and Socket.IO events.
+>
+> 5. Sessions and security
+>
+> - Invalidate all affected sessions when a credential changes.
+> - Preserve unrelated authenticated sessions.
+> - Enforce authorization server-side on every sensitive API.
+> - Use constant-time or secure password verification as appropriate.
+> - Ensure all sensitive responses use Cache-Control: no-store.
+> - Do not weaken existing login protections or cross-barber authorization.
+> - Document the trade-offs of keeping session state in memory.
+>
+> 6. Testing
+>
+> - Add backend security/integration tests for credential bootstrap, persistence, login, password changes, authorization, credential reuse, invalidation, rate limiting and migration.
+> - Use in-memory SQLite for ordinary tests.
+> - Use a disposable file-backed SQLite database to verify credential persistence after backend restart.
+> - Add Playwright automated browser tests for the Owner Dashboard credential-change workflow.
+> - Verify that old credentials stop working and new credentials work.
+> - Verify that previous sessions are invalidated appropriately.
+> - Verify receptionist and barber permissions are preserved.
+> - Run Steps 3–6 regression tests, existing Playwright E2E tests and frontend/backend production builds.
+> - Provide actual PASS/FAIL/SKIPPED counts and command exit codes.
+>
+> 7. Project safety
+>
+> - Do not modify or delete the real backend/salon.db or WAL/SHM files during implementation or tests.
+> - Do not accidentally start a watcher that modifies the real database.
+> - Preserve existing tickets, prices, durations, barber preferences and settings.
+> - Do not commit secrets, environment files, databases or test artifacts.
+> - Do not commit, push or deploy automatically.
+> - Do not purchase hosting or configure cloud resources.
+>
+> After implementation, report:
+>
+> - Files created/modified.
+> - Database migration strategy.
+> - Bootstrap instructions for local and production environments.
+> - Actual test results.
+> - Screenshots from automated browser tests.
+> - Remaining risks or issues.
+> - Confirmation of real database checksum preservation.
+>
+> Proceed with implementation and automated verification. Do not claim PASS for checks that were not actually executed.
+
+---
+
+### Barber PIN Setup and Login Integration
+**Date:** 2026-11-24
+**Prompt:**
+> Fix the Barber View login and credential-management integration in my existing Salon Queue Management System.
+>
+> CURRENT PROBLEM:
+>
+> - The Owner Dashboard opens successfully.
+> - Barber View login is not working correctly.
+> - I want the Owner to be able to set or reset each barber's login PIN directly from Owner Dashboard → Staff Access and Security.
+> - After an owner changes a barber PIN, that barber must be able to sign in with the new PIN immediately.
+> - The old PIN must stop working.
+>
+> IMPORTANT: The secure credential-management feature was recently implemented, but its real local Barber login workflow has not yet been verified. Debug and fix the existing implementation rather than rewriting it.
+>
+> TASKS:
+>
+> 1. Inspect the existing Barber login flow, barberAuth middleware, credentialService, ownerCredentials routes, session handling, frontend BarberPage, and StaffAccess UI.
+> 2. Identify why Barber View login fails in the actual local application. Check API requests, barber ID/name mapping (ravi, amit, imran), credential lookup precedence, and error responses.
+> 3. Make Owner Dashboard → Staff Access and Security the normal way to manage individual barber PINs.
+> 4. Ensure the owner can set/reset a barber PIN even if that barber has no previously initialized credential, after verifying the current owner's password.
+> 5. Store new credentials using salted Argon2id hashes in persistent SQLite. Do not store plaintext PINs.
+> 6. Ensure newly saved database-backed credentials take precedence over BARBER_CREDENTIALS environment values. No fallback to old environment credentials after an account is initialized.
+> 7. Ensure password change invalidates only the affected barber's sessions.
+> 8. Verify these complete flows for all three barbers:
+>    - Owner signs in.
+>    - Owner changes Ravi's PIN.
+>    - Ravi signs in using the new PIN.
+>    - Ravi's old PIN is rejected.
+>    - Owner changes Amit's PIN.
+>    - Amit signs in successfully.
+>    - Owner changes Imran's PIN.
+>    - Imran signs in successfully.
+>    - Ravi cannot access Amit or Imran's assignments.
+>    - Barber Start Service, Done, Available and On Break continue working.
+> 9. Test the complete workflow using Playwright and isolated SQLite. Include both owner and barber browser screens.
+> 10. Run credential security tests, Steps 4–6 regression tests, existing Playwright tests and frontend/backend builds.
+> 11. Verify stored barber credentials remain valid after a backend restart using a disposable file-backed SQLite database.
+> 12. Do not modify, delete, reset or migrate my real backend/salon.db or its WAL/SHM files while developing and testing.
+> 13. Do not expose actual PINs, owner passwords, credentials, tokens or customer data in logs or reports.
+> 14. Do not commit, push or deploy automatically.
+>
+> AFTER FIXING:
+>
+> - Report the root cause of the Barber login problem.
+> - Report the exact files modified.
+> - Provide actual PASS/FAIL test results.
+> - Explain how I can change Ravi, Amit and Imran's PINs from Owner Dashboard and then log into their Barber Views.
+> - Clearly distinguish automated test success from any local login that was not actually verified.
+>
+> Proceed with diagnosis, implementation and automated verification now.
+
+---
+
+### Barber Portal Before Deployment
+**Date:** 2026-11-24
+**Prompt:**
+> Improve the Barber View user experience and UI in my existing Salon Queue Management System before deployment.
+>
+> CURRENT PROBLEM:
+> Barbers currently need to manually change URLs such as /barber/ravi, /barber/amit, and /barber/imran. This is inconvenient and not suitable for a real salon.
+>
+> The Owner Dashboard and secure barber PIN management are now implemented and working.
+>
+> GOAL:
+> Create a professional, mobile-first Barber Portal where any barber can select their profile and sign in without manually editing the URL.
+>
+> IMPLEMENT:
+>
+> 1. Common Barber Portal
+> - Create /barber as the main entry route.
+> - Show a polished barber selection screen with profile cards for Ravi, Amit and Imran, using the roster returned by the existing backend.
+> - Never hardcode the barber list in the frontend.
+> - Each card shows the barber's display name and availability when that information is public.
+> - Clicking a barber opens their PIN login form.
+> - Support keyboard navigation and accessible labels.
+> - Preserve existing /barber/:name URLs as backward-compatible deep links.
+>
+> 2. Barber Authentication
+> - Reuse the existing barber-specific backend authentication and Argon2id credential store.
+> - Do not alter, reset or reinitialize any saved credentials.
+> - Do not expose PINs or credential hashes.
+> - Show clear messages for incorrect PIN, unconfigured account and unavailable server.
+> - Add Sign Out and Switch Barber actions.
+> - Prevent one barber's session from accessing another barber's assignments.
+> - Ensure switching accounts clears the previous barber session safely.
+>
+> 3. Modern Barber Dashboard
+> - Professional charcoal and gold styling consistent with the rest of the app.
+> - Mobile-first responsive layout.
+> - Clear welcome header, barber name and current duty/availability status.
+> - Large current customer card with token, customer name, selected services and duration.
+> - Large accessible Start Service and Complete Service buttons.
+> - Clear Available / On Break controls.
+> - Next eligible customer preview when provided by the backend.
+> - Clear empty state when no customer is assigned.
+> - Live Socket.IO updates, reconnection handling and loading/error states.
+> - Good visual hierarchy, spacing, typography and touch-friendly buttons.
+> - English and Gujarati translations.
+>
+> 4. Navigation
+> - Add a clear Barber Portal entry in the app navigation.
+> - Users should not have to type or edit a barber name in the URL.
+> - Keep the existing Owner, Reception, Customer and TV routes working.
+>
+> 5. Safety
+> - Preserve existing queue FCFS rules and barber preferences.
+> - Preserve all current SQLite queue records, services, settings and credential hashes.
+> - Do not modify production or real local database data during tests.
+> - Do not weaken authentication or expose private information.
+> - Do not change unrelated screens unnecessarily.
+>
+> 6. Automated verification
+> - Add Playwright tests for /barber selection, each barber, PIN login, logout and switching, unauthorized access, Start and Done, availability and break, English and Gujarati, 320px and 390px widths, no horizontal overflow, and existing direct links.
+> - Use an isolated in-memory or disposable SQLite database.
+> - Run credential security tests, Steps 4–6 regression tests, existing Playwright tests and both production builds.
+> - Report actual PASS/FAIL counts and changed files.
+>
+> IMPORTANT:
+> - Do not modify or delete real SQLite database records.
+> - Do not reset saved barber or owner credentials.
+> - Do not commit, push or deploy automatically.
+> - Do not expose secrets or tokens.
+>
+> Proceed with implementation and automated verification now.
+
+---
+
+### Waiting Area Display Navigation and Fullscreen
+**Date:** 2026-11-24
+**Prompt:**
+> Improve the Waiting Area TV Display UI in my existing Salon Queue Management System BEFORE committing or pushing to GitHub.
+>
+> CURRENT PROBLEM:
+> The /display page has no visible Back, Home, Exit or fullscreen controls. Users get stuck in the TV view and must manually edit the URL to leave.
+>
+> GOAL:
+> Make the TV Display professional, responsive and easy to exit, without reducing its effectiveness as a waiting-area screen.
+>
+> IMPLEMENT:
+>
+> 1. TV Navigation Controls
+>
+> - Add a clearly accessible Home button that navigates to /.
+> - Add a Back button that returns to a safe previous page, or Home if there is no safe same-origin history.
+> - Add an Exit Display button that navigates to /.
+> - Add an Enter/Exit Fullscreen toggle using the browser Fullscreen API.
+> - Keep an always-discoverable Exit Display control; do not make all exit/navigation controls permanently invisible.
+> - Controls must be usable with mouse, touch and keyboard.
+> - The Escape key should exit browser fullscreen using normal browser behavior. Do not trap Escape or attempt to close the browser tab.
+>
+> 2. TV UI Improvements
+>
+> - Preserve the existing charcoal and gold theme.
+> - Keep current serving tokens, barber status, and next five waiting tokens as the primary visual focus.
+> - Design a compact, unobtrusive header/toolbar with navigation and fullscreen controls.
+> - Ensure the toolbar does not obstruct queue information or animations.
+> - Optimize for 1920x1080 TV screens and smaller desktop/tablet viewports.
+> - Support English and Gujarati.
+> - Add appropriate hover, focus-visible, and touch feedback.
+> - Respect reduced-motion preferences.
+> - Avoid unnecessary scrolling or horizontal overflow at 1920x1080.
+>
+> 3. Preserve Existing Functionality
+>
+> - Socket.IO real-time updates and reconnect handling.
+> - The 30-second fallback refresh.
+> - Newly Called token highlights.
+> - Strict FCFS ordering of the first five Waiting tokens.
+> - TV privacy: never show customer names, phone numbers, or private details.
+> - Existing Reception, Barber, Owner, Customer and Home screens must continue working.
+>
+> 4. Automated Tests
+>
+> - Playwright test that Home and Exit Display navigate correctly.
+> - Test Back button behavior with and without safe navigation history.
+> - Test fullscreen enter and exit where the browser supports the API.
+> - Verify navigation works with keyboard.
+> - Verify 1920x1080 layout and responsive behavior.
+> - Verify English and Gujarati controls.
+> - Verify TV privacy, Socket.IO live updates, reconnect and highlight behavior.
+>
+> 5. Safety
+>
+> - Do not modify or delete the real SQLite database, WAL/SHM files, customer records, services, settings or credentials.
+> - Use isolated SQLite for automated tests.
+> - Do not introduce authentication to the public TV view.
+> - Do not commit, push or deploy automatically.
+>
+> Run the existing Playwright suite, Steps 4–6 regression tests and both production builds.
+>
+> After implementation, report:
+>
+> - Files changed.
+> - Actual PASS/FAIL/SKIPPED results.
+> - Screenshots of the updated TV Display.
+> - Any remaining limitations.
+>
+> Proceed with implementation and automated testing now.
+
+---
+
+### Reception Call Next investigation
+**Date:** 2026-11-24
+**Prompt:**
+> Before GitHub push and deployment, investigate and fix a bug in the Reception Dashboard of my existing Salon Queue Management System.
+>
+> REPORTED ISSUE:
+> In Reception Dashboard (/reception), barber Amit appears to show the "Call" action repeatedly, even when the queue or barber state should have changed.
+>
+> Do not assume the root cause. Investigate and reproduce it first.
+>
+> 1. Inspect ReceptionPage.tsx, receptionService.ts, queueService.ts, queueSelection.ts, barberService.ts, the SQLite schema and Socket.IO event handling.
+> 2. Reproduce the reported Amit scenario using isolated SQLite fixtures and the actual Reception UI through Playwright. Test each state: Available, Called, In Chair, Done, On Break and Off Duty.
+> 3. Verify that the correct barber ID and state are used throughout the frontend and backend. Check for name/ID mapping bugs specific to Amit.
+> 4. Investigate stale state, duplicate Call Next requests, optimistic UI updates, race conditions, polling, and Socket.IO reconnect handling.
+> 5. Ensure the Reception action reflects the actual server state:
+>    - Available with no active assignment: Call Next allowed when an eligible customer exists.
+>    - Called: Show the assigned token and appropriate Called status; do not permit another Call Next.
+>    - In Chair: Show Busy / In Service; do not permit another Call Next.
+>    - Done: Barber becomes Available and Call Next becomes eligible again.
+>    - On Break or Off Duty: Call Next disabled.
+>    - No eligible waiting ticket: clearly show no eligible customer instead of an active Call action.
+> 6. Ensure server-side validation prevents duplicate or concurrent calls even if the UI mistakenly enables the button.
+> 7. Verify first-come-first-served rules and barber preferences remain correct.
+> 8. After Call Next, Reception, Barber Portal, Customer My Status and TV Display should synchronize through existing Socket.IO events. Include reconnect/fallback refresh checks.
+> 9. Fix only confirmed bugs. Do not rewrite unrelated features or alter established business rules.
+> 10. Run automated tests covering Amit specifically and compare his behavior with Ravi and Imran. Add a regression test to prevent this issue from recurring.
+> 11. Run Step 4, Step 5, Step 6, credential security and Playwright tests, plus frontend/backend builds.
+>
+> SAFETY:
+>
+> - Do not modify, reset or delete my real backend/salon.db, WAL/SHM files, customer records, settings or credentials.
+> - Stop or avoid any development watcher that might touch the real database.
+> - Use isolated SQLite for tests.
+> - Do not expose customer data or credentials.
+> - Do not commit, push or deploy automatically.
+>
+> After fixing, report:
+>
+> - Exact root cause, with file/function references.
+> - What was changed.
+> - Actual PASS/FAIL/SKIPPED counts.
+> - Whether Amit's Call action behaves correctly across all states.
+> - Database checksum verification.
+> - Any unresolved issues.
+>
+> Proceed with investigation, fixes and automated verification.
+
+---
+
+### Final GitHub Commit and Push
+**Date:** 2026-11-24
+**Prompt:**
+> FINAL GITHUB PUSH — Salon Queue Management System
+>
+> My application is now working correctly. All development, UI improvements, and bug fixes are complete.
+>
+> Please perform the FINAL GitHub commit and push to my existing repository:
+> [https://github.com/dhrutikpatoriya/salon-queue-management.git](https://github.com/dhrutikpatoriya/salon-queue-management.git)
+>
+> 1. Check git status, current branch, remote, and recent commits.
+> 2. Fetch origin/main and verify there is no unexpected divergence.
+> 3. Identify all pending Owner Dashboard, secure credential management, Barber Portal, PIN login, TV navigation, Reception fixes, frontend and backend improvements, English/Gujarati translations, tests, documentation and prompts.md changes.
+> 4. Run available security tests, regression tests, Playwright E2E tests, and frontend/backend production builds.
+> 5. Fix any confirmed critical failures and rerun affected tests.
+> 6. Stage only appropriate source code, configuration templates, lockfiles, tests, and documentation. Do not use git add .
+> 7. Never stage actual environment files or credentials, SQLite database files or backups, WAL/SHM files, assignment PDFs or ZIPs, screenshots, test artifacts, node_modules, or dist directories.
+> 8. Verify .env.example contains placeholders only.
+> 9. Scan staged changes for secrets, tokens, password hashes, and private customer data.
+> 10. Run git diff --cached --check and review staged filenames.
+> 11. If all checks pass, commit with the message: Finalize Salon Queue Management System
+> 12. Push to origin/main without force.
+> 13. Verify local main is 0 ahead and 0 behind origin/main.
+> 14. Report the final commit hash, test results, and Git status.
+>
+> Preserve the existing SQLite database and saved credentials. Do not reset or delete records or rewrite Git history. Stop if secrets, unresolved test failures, or remote divergence are detected. Do not deploy or purchase hosting yet. Do not ask unnecessary questions.
+>
+> Proceed with the final GitHub verification, commit, and push now.

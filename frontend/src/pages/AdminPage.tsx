@@ -1,3 +1,4 @@
+import { StaffAccess } from '../components/StaffAccess';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from '../i18n/LanguageContext';
 import type { OwnerDashboard, QueueStatus, ServiceCategory } from '../types/salon';
@@ -85,6 +86,12 @@ export function AdminPage() {
         setLoadFailed(false);
       } else if (path === '/logout') {
         clearSession();
+      } else if (path === '/credentials/owner') {
+        clearSession();
+        setMessage('ownerPasswordChanged');
+      } else if (path.startsWith('/credentials/')) {
+        setMessage('credentialChanged');
+        refresh.current();
       } else {
         setMessage('saved');
         refresh.current();
@@ -107,7 +114,7 @@ export function AdminPage() {
         <h1 className="text-2xl font-bold sm:text-3xl">{t('admin.title')}</h1>
         {token && <button className={secondary} disabled={pending} onClick={() => void send('/logout', 'POST')}>{t('barber.logout')}</button>}
       </header>
-      {message && <p role={message === 'saved' ? 'status' : 'alert'} className={message === 'saved' ? 'text-emerald-300' : 'text-red-300'}>{translatedMessage.startsWith('admin.') ? t('admin.saveFailed') : translatedMessage}</p>}
+      {message && <p role={['saved', 'credentialChanged', 'ownerPasswordChanged'].includes(message) ? 'status' : 'alert'} className={['saved', 'credentialChanged', 'ownerPasswordChanged'].includes(message) ? 'text-emerald-300' : 'text-red-300'}>{translatedMessage.startsWith('admin.') ? t('admin.saveFailed') : translatedMessage}</p>}
       {!token && (
         <form className={`${panel} max-w-md`} onSubmit={(event) => {
           event.preventDefault();
@@ -157,6 +164,8 @@ export function AdminPage() {
               );
             })}
           </section>
+          <StaffAccess receptionistConfigured={data.receptionistCredentialConfigured} barbers={data.barbers} pending={pending}
+            change={(id, fields) => send(`/credentials/${encodeURIComponent(id)}`, 'PATCH', fields)} />
           <section className={panel}>
             <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold text-[#F2C754]">{t('admin.serviceManagement')}</h2><button className={primary} disabled={pending} onClick={() => setEditingService('new')}>{t('admin.addService')}</button></header>
             {editingService && <ServiceEditor key={editingService === 'new' ? 'new' : editingService.id} service={editingService === 'new' ? undefined : editingService} pending={pending} cancel={() => setEditingService(null)} save={async (service) => {

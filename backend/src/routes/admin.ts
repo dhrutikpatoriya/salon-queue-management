@@ -1,3 +1,4 @@
+import { updateOwnerManagedCredential } from './ownerCredentials.js';
 import { Router, type Request, type RequestHandler } from 'express';
 import { loginOwner, logoutOwner, requireOwner } from '../middleware/ownerAuth.js';
 import { AdminError, getOwnerDashboard, saveService, setBarberDuty, updateSalonSettings } from '../services/adminService.js';
@@ -7,6 +8,7 @@ export const adminRouter = Router();
 adminRouter.post('/login', loginOwner);
 adminRouter.use(requireOwner);
 adminRouter.post('/logout', logoutOwner);
+adminRouter.patch('/credentials/:id', updateOwnerManagedCredential);
 adminRouter.get('/dashboard', (_req, res) => res.json(getOwnerDashboard()));
 
 function mutation(save: (req: Request) => string | void, created = false): RequestHandler {

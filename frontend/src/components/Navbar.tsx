@@ -20,14 +20,14 @@ export const Navbar: React.FC = () => {
     { path: '/join', label: t('nav.join'), icon: UserPlus },
     { path: `/status/${activeTicketId}`, label: t('nav.status'), icon: Clock },
     { path: '/reception', label: t('nav.reception'), icon: ClipboardList },
-    { path: '/barber/Ravi', label: t('nav.barber'), icon: UserCheck },
+    { path: '/barber', label: t('nav.barber'), icon: UserCheck },
     { path: '/display', label: t('nav.display'), icon: Monitor, isTv: true },
     { path: '/admin', label: t('nav.admin'), icon: Settings },
   ];
 
   const isActive = (path: string) => {
     if (path.startsWith('/status/')) return location.pathname.startsWith('/status');
-    if (path.startsWith('/barber/')) return location.pathname.startsWith('/barber');
+    if (path === '/barber') return location.pathname === path || location.pathname.startsWith('/barber/');
     return location.pathname === path;
   };
 
@@ -57,6 +57,7 @@ export const Navbar: React.FC = () => {
                 <Link
                   key={item.path}
                   to={item.path}
+                state={item.isTv ? { displayFrom: location.pathname + location.search + location.hash } : undefined}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                     active
                       ? 'bg-[#D4A017] text-[#111827] shadow-sm font-semibold'
@@ -98,6 +99,7 @@ export const Navbar: React.FC = () => {
               <Link
                 key={item.path}
                 to={item.path}
+                state={item.isTv ? { displayFrom: location.pathname + location.search + location.hash } : undefined}
                 className={`flex items-center gap-1 whitespace-nowrap px-2.5 py-1.5 rounded-lg text-xs font-medium shrink-0 min-h-[34px] transition-colors ${
                   active
                     ? 'bg-[#D4A017] text-[#111827] font-bold shadow-sm'

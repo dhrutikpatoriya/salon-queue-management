@@ -28,8 +28,7 @@ export default function App() {
           <Route path="/status/:id" element={<StandardLayout><StatusPage /></StandardLayout>} />
           <Route path="/status" element={<StatusRedirect />} />
           <Route path="/reception" element={<StandardLayout><ReceptionPage /></StandardLayout>} />
-          <Route path="/barber/:name" element={<StandardLayout><BarberPage /></StandardLayout>} />
-          <Route path="/barber" element={<Navigate to="/barber/Ravi" replace />} />
+          <Route path="/barber/:name?" element={<StandardLayout><BarberPage /></StandardLayout>} />
           <Route path="/admin" element={<StandardLayout><AdminPage /></StandardLayout>} />
 
           {/* Screen 6: Dedicated Fullscreen Layout WITHOUT normal navigation bar */}

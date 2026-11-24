@@ -4,6 +4,10 @@ import { BarberActionError, changeAssignment, changeAvailability, getBarberDashb
 import { broadcastQueueUpdate } from '../socket/socketHandler.js';
 
 export const barberRouter = Router();
+barberRouter.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 barberRouter.use('/:name', resolveBarber);
 barberRouter.post('/:name/login', loginBarber);
 barberRouter.use('/:name', requireBarber);

@@ -9,9 +9,12 @@
     "test:step4": "npm run build && node --test dist/tests/step4_reception_test.js",
     "test:step5": "npm run build && node --test dist/tests/step5_barber_display_test.js && tsx --test ../frontend/tests/liveQueue.test.ts",
     "test:step6": "npm run build && node --test dist/tests/step6_owner_test.js",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "credentials:bootstrap": "node dist/scripts/bootstrapCredentials.js",
+    "test:credentials": "npm run build && node --test dist/tests/credential_access_test.js"
   },
   "dependencies": {
+    "argon2": "^0.45.2",
     "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
